@@ -1,11 +1,14 @@
 * {
     margin: 0;
     padding: 0;
+    box-sizing: border-box;
 }
 
 body {
     min-height: 100vh;
     background-color: rgb(255, 255, 255);
+    font-family: Arial, sans-serif;
+    color: #111;
 }
 
 
@@ -16,6 +19,7 @@ body {
 nav {
     position: fixed;
     top: 0;
+    left: 0;
     width: 100%;
     z-index: 1000;
 
@@ -72,6 +76,7 @@ nav li:first-child {
 
     background: rgba(255, 0, 0, 0.2);
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
 
     height: 100vh;
     width: 250px;
@@ -110,10 +115,13 @@ nav li:first-child {
     padding-top: 100px;
     padding-left: 30px;
     padding-right: 30px;
+
+    color: #111111;
 }
 
 .location-container h1 {
     margin-bottom: 20px;
+    color: #111111;
 }
 
 .location-container button {
@@ -123,11 +131,26 @@ nav li:first-child {
     border: none;
     border-radius: 6px;
 
+    background-color: #222222;
+    color: white;
+
     cursor: pointer;
+}
+
+.location-container button:hover {
+    background-color: #444444;
 }
 
 .location-container p {
     margin: 10px 0;
+
+    color: #111111;
+    font-size: 16px;
+}
+
+.location-container span {
+    color: #111111;
+    font-weight: bold;
 }
 
 
@@ -151,5 +174,10 @@ nav li:first-child {
 
     .sidebar {
         width: 100%;
+    }
+
+    .location-container {
+        padding-left: 20px;
+        padding-right: 20px;
     }
 }
