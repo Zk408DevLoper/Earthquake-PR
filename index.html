@@ -1,118 +1,60 @@
 <!DOCTYPE html>
-
-<html>
+<html lang="en">
 
 <head>
-
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
 
     <meta
         name="viewport"
-        content="width=device-width, initial-scale=1"
+        content="width=device-width, initial-scale=1.0"
     >
 
-    <title>Earthquake</title>
+    <title>Earthquake Application</title>
 
     <link
         rel="stylesheet"
         href="style.css"
     >
-
 </head>
-
 
 <body>
 
-
-    <!-- ============================= -->
-    <!-- NAVIGATION BAR -->
-    <!-- ============================= -->
-
+    <!-- Navigation -->
     <nav>
-
-        <!-- SIDEBAR -->
-
-        <ul class="sidebar">
-
-            <li onclick="hidesideBar()">
-
-                <a href="#">
-
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        height="24px"
-                        viewBox="0 -960 960 960"
-                        width="24px"
-                        fill="#e3e3e3"
-                    >
-
-                        <path
-                            d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
-                        />
-
-                    </svg>
-
-                </a>
-
-            </li>
-
-
-            <li>
-                <a href="#">Recent</a>
-            </li>
-
-
-            <li>
-                <a href="#">Settings</a>
-            </li>
-
-        </ul>
-
-
-        <!-- NORMAL NAVBAR -->
 
         <ul>
 
             <li>
-                <a href="#">Earthquake</a>
-            </li>
-
-
-            <li class="hideonmobile">
-                <a href="#">Recent</a>
-            </li>
-
-
-            <li class="hideonmobile">
-                <a href="#">Settings</a>
-            </li>
-
-
-            <!-- MENU BUTTON -->
-
-            <li
-                class="menubutton"
-                onclick="showsideBar()"
-            >
-
                 <a href="#">
-
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        height="24px"
-                        viewBox="0 -960 960 960"
-                        width="24px"
-                        fill="#000000"
-                    >
-
-                        <path
-                            d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"
-                        />
-
-                    </svg>
-
+                    Earthquake Alert
                 </a>
+            </li>
 
+            <li class="hideonmobile">
+                <a href="#">
+                    Home
+                </a>
+            </li>
+
+            <li class="hideonmobile">
+                <a href="#">
+                    Earthquakes
+                </a>
+            </li>
+
+            <li class="hideonmobile">
+                <a href="#">
+                    Location
+                </a>
+            </li>
+
+            <li class="menubutton">
+                <a
+                    href="#"
+                    onclick="showsideBar(); return false;"
+                >
+                    ☰
+                </a>
             </li>
 
         </ul>
@@ -120,46 +62,79 @@
     </nav>
 
 
+    <!-- Sidebar -->
+    <div class="sidebar">
 
-    <!-- ============================= -->
-    <!-- LOCATION -->
-    <!-- ============================= -->
+        <ul>
 
-    <div class="location-container">
+            <li>
+                <a
+                    href="#"
+                    onclick="hidesideBar(); return false;"
+                >
+                    ✕
+                </a>
+            </li>
 
-        <h1>Your Location</h1>
+            <li>
+                <a href="#">
+                    Home
+                </a>
+            </li>
 
+            <li>
+                <a href="#">
+                    Earthquakes
+                </a>
+            </li>
 
-        <button onclick="getUserLocation()">
-            Get My Location
-        </button>
+            <li>
+                <a href="#">
+                    Location
+                </a>
+            </li>
 
-
-        <p>
-            Latitude:
-            <span id="latitude">
-                Not available
-            </span>
-        </p>
-
-
-        <p>
-            Longitude:
-            <span id="longitude">
-                Not available
-            </span>
-        </p>
+        </ul>
 
     </div>
 
 
+    <!-- Location Section -->
+    <main>
 
-    <!-- ============================= -->
-    <!-- JAVASCRIPT -->
-    <!-- ============================= -->
+        <div class="location-container">
 
+            <h1>
+                Your Location
+            </h1>
+
+            <button
+                onclick="getUserLocation()"
+            >
+                Get My Location
+            </button>
+
+            <p>
+                Latitude:
+                <span id="latitude">
+                    Not available
+                </span>
+            </p>
+
+            <p>
+                Longitude:
+                <span id="longitude">
+                    Not available
+                </span>
+            </p>
+
+        </div>
+
+    </main>
+
+
+    <!-- JavaScript -->
     <script src="script.js"></script>
-
 
 </body>
 
