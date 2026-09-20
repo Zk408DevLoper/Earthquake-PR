@@ -3,137 +3,92 @@
 
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <title>Earthquake Alert System</title>
 
-    <title>Earthquake Application</title>
-
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <!-- Navigation -->
     <nav>
-
         <ul>
-
             <li>
-                <a href="#">
-                    Earthquake Alert
-                </a>
+                <a href="#">Earthquake Alert</a>
             </li>
 
             <li class="hideonmobile">
-                <a href="#">
-                    Home
-                </a>
+                <a href="#">Home</a>
             </li>
 
             <li class="hideonmobile">
-                <a href="#">
-                    Earthquakes
-                </a>
+                <a href="#location">Location</a>
             </li>
 
             <li class="hideonmobile">
-                <a href="#">
-                    Location
-                </a>
+                <a href="#earthquake">Earthquake</a>
             </li>
 
             <li class="menubutton">
-                <a
-                    href="#"
-                    onclick="showsideBar(); return false;"
-                >
-                    ☰
-                </a>
+                <a href="#" onclick="showsideBar(); return false;">☰</a>
             </li>
-
         </ul>
-
     </nav>
 
-
-    <!-- Sidebar -->
     <div class="sidebar">
-
         <ul>
-
             <li>
-                <a
-                    href="#"
-                    onclick="hidesideBar(); return false;"
-                >
-                    ✕
-                </a>
+                <a href="#" onclick="hidesideBar(); return false;">✕</a>
             </li>
 
             <li>
-                <a href="#">
-                    Home
-                </a>
+                <a href="#">Home</a>
             </li>
 
             <li>
-                <a href="#">
-                    Earthquakes
-                </a>
+                <a href="#location">Location</a>
             </li>
 
             <li>
-                <a href="#">
-                    Location
-                </a>
+                <a href="#earthquake">Earthquake</a>
             </li>
-
         </ul>
-
     </div>
 
-
-    <!-- Location Section -->
     <main>
 
-        <div class="location-container">
+        <section id="location" class="location-container">
+            <h1>Your Location</h1>
 
-            <h1>
-                Your Location
-            </h1>
-
-            <button
-                onclick="getUserLocation()"
-            >
+            <button onclick="getUserLocation()">
                 Get My Location
             </button>
 
             <p>
                 Latitude:
-                <span id="latitude">
-                    Not available
-                </span>
+                <span id="latitude">Not available</span>
             </p>
 
             <p>
                 Longitude:
-                <span id="longitude">
-                    Not available
-                </span>
+                <span id="longitude">Not available</span>
             </p>
+        </section>
 
-        </div>
+        <section id="earthquake" class="earthquake-container">
+            <h1>Nearest Earthquake</h1>
+
+            <div id="nearest-earthquake">
+                <p>
+                    Get your location to retrieve
+                    the nearest earthquake.
+                </p>
+            </div>
+        </section>
 
     </main>
 
-
-    <!-- JavaScript -->
     <script src="script.js"></script>
 
 </body>
