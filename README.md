@@ -1,1 +1,1 @@
-# Earthquake-PR
+# Earthquake
