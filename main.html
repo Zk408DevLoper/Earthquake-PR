@@ -1,31 +1,166 @@
 <!DOCTYPE html>
-<!--[if lt IE 7]>      <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
-<!--[if IE 7]>         <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
-<!--[if IE 8]>         <html class="no-js lt-ie9"> <![endif]-->
-<!--[if gt IE 8]>      <html class="no-js"> <!--<![endif]-->
+
 <html>
-    <head>
-        <meta charset="utf-8">
-        <meta http-equiv="X-UA-Compatible" content="IE=edge">
-        <title></title>
-        <meta name="description" content="">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <link rel="stylesheet" href="style.css">
-    </head>
-    <body>
-        <nav>
-            <ul class="sidebar">
-                <li onclick=hidesideBar()><a href="#"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"/></svg></a></li>
-                <li><a href="#">Recent</a></li>
-                <li><a href="#">Settings</a></li>
-            </ul>
-            <ul>
-                <li><a href="#">Earthquake</a></li>
-                <li class="hideonmobile"><a href="#">Recent</a></li>
-                <li class="hideonmobile"><a href="#">Settings</a></li>
-                <li class="menubutton" onclick=showsideBar()><a href="#"><svg xmlns="http://www.w3.org/2000/svg" height="24px" viewBox="0 -960 960 960" width="24px" fill="#e3e3e3"><path d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"/></svg></a></li>
-            </ul>
-        </nav>
-        <script src="script.js" async defer></script>
-    </body>
+
+<head>
+
+    <meta charset="utf-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <title>Earthquake Application</title>
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+
+</head>
+
+
+<body>
+
+
+    <!-- ============================= -->
+    <!-- NAVIGATION BAR -->
+    <!-- ============================= -->
+
+    <nav>
+
+        <!-- SIDEBAR -->
+
+        <ul class="sidebar">
+
+            <li onclick="hidesideBar()">
+
+                <a href="#">
+
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        height="24px"
+                        viewBox="0 -960 960 960"
+                        width="24px"
+                        fill="#e3e3e3"
+                    >
+
+                        <path
+                            d="m256-200-56-56 224-224-224-224 56-56 224 224 224-224 56 56-224 224 224 224-56 56-224-224-224 224Z"
+                        />
+
+                    </svg>
+
+                </a>
+
+            </li>
+
+
+            <li>
+                <a href="#">Recent</a>
+            </li>
+
+
+            <li>
+                <a href="#">Settings</a>
+            </li>
+
+        </ul>
+
+
+        <!-- NORMAL NAVBAR -->
+
+        <ul>
+
+            <li>
+                <a href="#">Earthquake</a>
+            </li>
+
+
+            <li class="hideonmobile">
+                <a href="#">Recent</a>
+            </li>
+
+
+            <li class="hideonmobile">
+                <a href="#">Settings</a>
+            </li>
+
+
+            <!-- MENU BUTTON -->
+
+            <li
+                class="menubutton"
+                onclick="showsideBar()"
+            >
+
+                <a href="#">
+
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        height="24px"
+                        viewBox="0 -960 960 960"
+                        width="24px"
+                        fill="#e3e3e3"
+                    >
+
+                        <path
+                            d="M120-240v-80h720v80H120Zm0-200v-80h720v80H120Zm0-200v-80h720v80H120Z"
+                        />
+
+                    </svg>
+
+                </a>
+
+            </li>
+
+        </ul>
+
+    </nav>
+
+
+
+    <!-- ============================= -->
+    <!-- LOCATION -->
+    <!-- ============================= -->
+
+    <div class="location-container">
+
+        <h1>Your Location</h1>
+
+
+        <button onclick="getUserLocation()">
+            Get My Location
+        </button>
+
+
+        <p>
+            Latitude:
+            <span id="latitude">
+                Not available
+            </span>
+        </p>
+
+
+        <p>
+            Longitude:
+            <span id="longitude">
+                Not available
+            </span>
+        </p>
+
+    </div>
+
+
+
+    <!-- ============================= -->
+    <!-- JAVASCRIPT -->
+    <!-- ============================= -->
+
+    <script src="script.js"></script>
+
+
+</body>
+
 </html>

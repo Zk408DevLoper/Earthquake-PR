@@ -1,7 +1,6 @@
 * {
     margin: 0;
     padding: 0;
-
 }
 
 body {
@@ -9,10 +8,16 @@ body {
     background-color: rgb(255, 255, 255);
 }
 
+
+/* ============================= */
+/* NAVIGATION BAR */
+/* ============================= */
+
 nav {
     position: fixed;
     top: 0;
     width: 100%;
+    z-index: 1000;
 
     background: rgba(15, 15, 15, 0.4);
     backdrop-filter: blur(12px);
@@ -25,6 +30,7 @@ nav {
 nav ul {
     width: 100%;
     list-style: none;
+
     display: flex;
     justify-content: flex-end;
     align-items: center;
@@ -37,9 +43,12 @@ nav li {
 nav a {
     height: 100%;
     padding: 0 30px;
+
     text-decoration: none;
+
     display: flex;
     align-items: center;
+
     color: white;
 }
 
@@ -51,23 +60,28 @@ nav li:first-child {
     margin-right: auto;
 }
 
+
+/* ============================= */
+/* SIDEBAR */
+/* ============================= */
+
 .sidebar {
     position: fixed;
     top: 0;
     right: 0;
+
     background: rgba(255, 0, 0, 0.2);
     backdrop-filter: blur(10px);
+
     height: 100vh;
     width: 250px;
+
     z-index: 999;
+
     display: none;
     flex-direction: column;
     align-items: flex-start;
     justify-content: flex-start;
-}
-
-.menubutton {
-    display: none;
 }
 
 .sidebar li {
@@ -78,16 +92,63 @@ nav li:first-child {
     width: 100%;
 }
 
+
+/* ============================= */
+/* MENU BUTTON */
+/* ============================= */
+
+.menubutton {
+    display: none;
+}
+
+
+/* ============================= */
+/* LOCATION */
+/* ============================= */
+
+.location-container {
+    padding-top: 100px;
+    padding-left: 30px;
+    padding-right: 30px;
+}
+
+.location-container h1 {
+    margin-bottom: 20px;
+}
+
+.location-container button {
+    padding: 10px 20px;
+    margin-bottom: 20px;
+
+    border: none;
+    border-radius: 6px;
+
+    cursor: pointer;
+}
+
+.location-container p {
+    margin: 10px 0;
+}
+
+
+/* ============================= */
+/* MOBILE */
+/* ============================= */
+
 @media (max-width: 800px) {
+
     .hideonmobile {
         display: none;
     }
+
     .menubutton {
         display: block;
     }
 }
 
+
 @media (max-width: 400px) {
+
     .sidebar {
         width: 100%;
     }
