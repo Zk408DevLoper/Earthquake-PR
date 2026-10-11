@@ -1,185 +1,428 @@
-function showsideBar() {
-    const sidebar = document.querySelector('.sidebar');
-    sidebar.style.display = 'flex';
+"use strict";
+
+const EARTHQUAKE_API = "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=100&orderby=time-desc";
+const DEFAULT_MAP_CENTER = [12.8797, 121.7740];
+const DEFAULT_MAP_ZOOM = 5;
+
+let earthquakeMap;
+let earthquakeLayer;
+let userMarker;
+let userLatitude = null;
+let userLongitude = null;
+let earthquakeEvents = [];
+let nearestEvent = null;
+let toastTimeout;
+
+const elements = {
+  pageTitle: document.getElementById("page-title"),
+  connectionDot: document.getElementById("connection-dot"),
+  connectionStatus: document.getElementById("connection-status"),
+  lastUpdated: document.getElementById("last-updated"),
+  eventCount: document.getElementById("event-count"),
+  mapMessage: document.getElementById("map-message"),
+  nearestLocation: document.getElementById("nearest-location"),
+  nearestDistance: document.getElementById("nearest-distance"),
+  nearestDepth: document.getElementById("nearest-depth"),
+  nearestMagnitude: document.getElementById("nearest-magnitude"),
+  magnitudeBadge: document.getElementById("magnitude-badge"),
+  coordinates: document.getElementById("coordinates"),
+  earthquakeList: document.getElementById("earthquake-list"),
+  timelineCount: document.getElementById("timeline-count"),
+  homeEventCount: document.getElementById("home-event-count"),
+  homeLocationStatus: document.getElementById("home-location-status"),
+  homeCoordinates: document.getElementById("home-coordinates"),
+  homeNearestLocation: document.getElementById("home-nearest-location"),
+  homeNearestMag: document.getElementById("home-nearest-mag"),
+  homeNearestDistance: document.getElementById("home-nearest-distance"),
+  toast: document.getElementById("toast"),
+  refreshButton: document.getElementById("refresh-button")
+};
+
+const VIEW_TITLES = {
+  "home-view": "Home",
+  "timeline-view": "Earthquake Timeline",
+  "map-view": "Earthquake Monitor",
+  "weather-view": "Weather",
+  "menu-view": "Menu"
+};
+
+function initializeMap() {
+  if (typeof L === "undefined") {
+    elements.mapMessage.hidden = false;
+    elements.mapMessage.textContent = "Map library could not be loaded. Check your internet connection.";
+    return;
+  }
+
+  earthquakeMap = L.map("earthquake-map", {
+    zoomControl: false,
+    attributionControl: true,
+    preferCanvas: true
+  }).setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    subdomains: "abcd",
+    maxZoom: 19,
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  }).addTo(earthquakeMap);
+
+  L.control.zoom({ position: "bottomright" }).addTo(earthquakeMap);
+  earthquakeLayer = L.layerGroup().addTo(earthquakeMap);
 }
 
-function hidesideBar() {
-    const sidebar = document.querySelector('.sidebar');
-    sidebar.style.display = 'none';
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, character => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  })[character]);
 }
 
-function getUserLocation() {
-    if (!navigator.geolocation) {
-        alert("Geolocation is not supported by this device.");
-        return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-        function(position) {
-            const latitude = position.coords.latitude;
-            const longitude = position.coords.longitude;
-
-            console.log("Your latitude:", latitude);
-            console.log("Your longitude:", longitude);
-
-            document.getElementById("latitude").textContent = latitude.toFixed(6);
-            document.getElementById("longitude").textContent = longitude.toFixed(6);
-
-            getNearestEarthquake(latitude, longitude);
-        },
-        function(error) {
-            console.error("Location error:", error);
-
-            switch (error.code) {
-                case error.PERMISSION_DENIED:
-                    alert("Location permission was denied.");
-                    break;
-                case error.POSITION_UNAVAILABLE:
-                    alert("Location information is unavailable.");
-                    break;
-                case error.TIMEOUT:
-                    alert("Location request timed out.");
-                    break;
-                default:
-                    alert("An unknown location error occurred.");
-            }
-        },
-        {
-            enableHighAccuracy: true,
-            timeout: 15000,
-            maximumAge: 0
-        }
-    );
+function formatDate(value) {
+  if (value === null || value === undefined || value === "") return "Time not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Time not available";
+  return date.toLocaleString([], {
+    year: "numeric", month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  });
 }
 
-async function getNearestEarthquake(userLatitude, userLongitude) {
-    const url =
-        "https://www.seismicportal.eu/fdsnws/event/1/query" +
-        "?format=json" +
-        "&limit=100" +
-        "&orderby=time-desc";
+function shortDate(value) {
+  if (value === null || value === undefined || value === "") return "Time not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Time not available";
+  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+}
 
-    try {
-        console.log("Retrieving earthquake data...");
+function toNumberOrNull(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
 
-        const response = await fetch(url);
+function eventFromFeature(feature, index) {
+  if (!feature || !feature.geometry || !Array.isArray(feature.geometry.coordinates)) return null;
+  const coordinates = feature.geometry.coordinates;
+  if (coordinates.length < 2) return null;
 
-        if (!response.ok) {
-            throw new Error("HTTP error: " + response.status);
-        }
+  const longitude = toNumberOrNull(coordinates[0]);
+  const latitude = toNumberOrNull(coordinates[1]);
+  if (latitude === null || longitude === null) return null;
 
-        const data = await response.json();
+  const properties = feature.properties || {};
+  const rawTime = properties.time || properties.lastupdate || properties.updated || null;
+  const magnitude = toNumberOrNull(properties.mag ?? properties.magnitude);
+  const depth = coordinates.length > 2 ? toNumberOrNull(coordinates[2]) : toNumberOrNull(properties.depth);
+  const location = properties.flynn_region || properties.region || properties.place || properties.title || "Location not reported";
+  const id = String(feature.id || properties.source_id || properties.unid || `event-${index}`);
 
-        console.log("Earthquake data:", data);
+  return {
+    id,
+    latitude,
+    longitude,
+    magnitude,
+    depth,
+    location: String(location),
+    time: rawTime,
+    distance: null,
+    feature
+  };
+}
 
-        if (!data.features || data.features.length === 0) {
-            document.getElementById("nearest-earthquake").innerHTML =
-                "<p>No earthquake data available.</p>";
-            return;
-        }
+async function loadEarthquakeData() {
+  setConnectionState("loading", "Retrieving earthquake data…");
+  elements.mapMessage.hidden = false;
+  elements.mapMessage.textContent = "Loading earthquake data…";
+  elements.refreshButton.classList.add("is-loading");
 
-        let nearestEarthquake = null;
-        let nearestDistance = Infinity;
+  try {
+    const response = await fetch(EARTHQUAKE_API, {
+      method: "GET",
+      headers: { "Accept": "application/json" },
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error(`Earthquake service returned HTTP ${response.status}`);
 
-        data.features.forEach(function(earthquake) {
-            const properties = earthquake.properties;
-            const geometry = earthquake.geometry;
+    const data = await response.json();
+    if (!data || !Array.isArray(data.features)) throw new Error("The earthquake service returned an unexpected response.");
 
-            if (!geometry || !geometry.coordinates) {
-                return;
-            }
+    earthquakeEvents = data.features.map(eventFromFeature).filter(Boolean);
+    if (userLatitude !== null && userLongitude !== null) updateEventDistances();
 
-            const longitude = geometry.coordinates[0];
-            const latitude = geometry.coordinates[1];
-            const depth = geometry.coordinates.length > 2
-                ? geometry.coordinates[2]
-                : "Unknown";
+    renderMapMarkers();
+    renderTimeline();
+    renderNearestEarthquake();
+    elements.eventCount.textContent = String(earthquakeEvents.length);
+    elements.homeEventCount.textContent = String(earthquakeEvents.length);
+    elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    setConnectionState("online", "Earthquake data connected");
+    elements.mapMessage.hidden = earthquakeEvents.length > 0;
+    if (!earthquakeEvents.length) elements.mapMessage.textContent = "No earthquake events were returned.";
+  } catch (error) {
+    console.error("Earthquake retrieval error:", error);
+    setConnectionState("error", "Unable to retrieve earthquake data");
+    elements.mapMessage.hidden = false;
+    elements.mapMessage.textContent = "Unable to load earthquake data. Check your internet connection and try again.";
+    elements.earthquakeList.innerHTML = '<div class="empty-state">Earthquake data could not be retrieved. Check your connection and try again.</div>';
+    showToast("Could not retrieve earthquake data. Please try again.");
+  } finally {
+    elements.refreshButton.classList.remove("is-loading");
+  }
+}
 
-            const magnitude = properties.mag ?? "Unknown";
-            const location = properties.flynn_region ||
-                properties.place ||
-                "Unknown location";
+function setConnectionState(state, message) {
+  elements.connectionDot.classList.remove("online", "error");
+  if (state === "online") elements.connectionDot.classList.add("online");
+  if (state === "error") elements.connectionDot.classList.add("error");
+  elements.connectionStatus.textContent = message;
+}
 
-            const time = properties.time || "Unknown";
+function getMagnitudeColor(magnitude) {
+  if (magnitude === null) return "#70b9e6";
+  if (magnitude >= 5) return "#ed2929";
+  if (magnitude >= 4) return "#f28d48";
+  if (magnitude >= 2) return "#4dbb91";
+  return "#70b9e6";
+}
 
-            const distance = calculateDistance(
-                userLatitude,
-                userLongitude,
-                latitude,
-                longitude
-            );
+function createQuakeIcon(event, isNearest) {
+  const magnitude = event.magnitude === null ? 1 : Math.max(1, event.magnitude);
+  const size = Math.min(20, Math.max(8, 7 + magnitude * 1.3));
+  const classes = isNearest ? "quake-marker nearest-marker" : "quake-marker";
+  const color = getMagnitudeColor(event.magnitude);
+  return L.divIcon({
+    className: "",
+    html: `<div class="${classes}" style="width:${size}px;height:${size}px;background:${color};"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2]
+  });
+}
 
-            if (distance < nearestDistance) {
-                nearestDistance = distance;
+function renderMapMarkers() {
+  if (!earthquakeMap || !earthquakeLayer) return;
+  earthquakeLayer.clearLayers();
 
-                nearestEarthquake = {
-                    latitude: latitude,
-                    longitude: longitude,
-                    magnitude: magnitude,
-                    depth: depth,
-                    location: location,
-                    time: time
-                };
-            }
-        });
+  earthquakeEvents.forEach(event => {
+    const isNearest = Boolean(nearestEvent && event.id === nearestEvent.id);
+    const marker = L.marker([event.latitude, event.longitude], {
+      icon: createQuakeIcon(event, isNearest),
+      keyboard: true,
+      title: `${event.location}; magnitude ${event.magnitude ?? "unknown"}`
+    });
+    marker.bindPopup(`
+      <span class="popup-title">${escapeHtml(event.location)}</span>
+      <span class="popup-mag">M ${event.magnitude === null ? "--" : event.magnitude.toFixed(1)}</span><br>
+      <span>Depth: ${event.depth === null ? "Unknown" : `${event.depth} km`}</span><br>
+      <span>${escapeHtml(formatDate(event.time))}</span><br>
+      <button class="popup-select" type="button" onclick="selectEarthquake('${escapeHtml(event.id).replace(/'/g, "\\'")}')">View event details</button>
+    `);
+    marker.addTo(earthquakeLayer);
+  });
 
-        if (!nearestEarthquake) {
-            document.getElementById("nearest-earthquake").innerHTML =
-                "<p>No earthquake found.</p>";
-            return;
-        }
+  if (userLatitude !== null && userLongitude !== null) {
+    if (userMarker && earthquakeMap.hasLayer(userMarker)) earthquakeMap.removeLayer(userMarker);
+    const icon = L.divIcon({ className: "", html: '<div class="user-marker"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+    userMarker = L.marker([userLatitude, userLongitude], { icon, title: "Your location", zIndexOffset: 1000 })
+      .bindPopup("<strong>Your location</strong><br>GPS coordinates from this device")
+      .addTo(earthquakeMap);
+  }
+}
 
-        displayNearestEarthquake(
-            nearestEarthquake,
-            nearestDistance
-        );
+function updateEventDistances() {
+  earthquakeEvents.forEach(event => {
+    event.distance = calculateDistance(userLatitude, userLongitude, event.latitude, event.longitude);
+  });
+  const candidates = earthquakeEvents.filter(event => Number.isFinite(event.distance));
+  candidates.sort((a, b) => a.distance - b.distance);
+  nearestEvent = candidates.length ? candidates[0] : null;
+}
 
-    } catch (error) {
-        console.error("Earthquake retrieval error:", error);
+function renderNearestEarthquake() {
+  if (userLatitude === null || userLongitude === null) {
+    elements.nearestLocation.textContent = "Get your location to calculate the nearest reported earthquake.";
+    elements.nearestDistance.textContent = "--";
+    elements.nearestDepth.textContent = "--";
+    elements.nearestMagnitude.textContent = "--";
+    elements.magnitudeBadge.textContent = "M --";
+    elements.homeLocationStatus.textContent = "Not set";
+    elements.homeCoordinates.textContent = "Tap locate to get coordinates";
+    elements.homeNearestLocation.textContent = "Location not available yet";
+    elements.homeNearestMag.textContent = "Magnitude --";
+    elements.homeNearestDistance.textContent = "Distance --";
+    return;
+  }
 
-        document.getElementById("nearest-earthquake").innerHTML =
-            "<p>Unable to retrieve earthquake data.</p>";
-    }
+  if (!nearestEvent) {
+    elements.nearestLocation.textContent = "No earthquake location is available in the retrieved records.";
+    elements.nearestDistance.textContent = "--";
+    elements.nearestDepth.textContent = "--";
+    elements.nearestMagnitude.textContent = "--";
+    elements.magnitudeBadge.textContent = "M --";
+    elements.homeNearestLocation.textContent = "No event available";
+    elements.homeNearestMag.textContent = "Magnitude --";
+    elements.homeNearestDistance.textContent = "Distance --";
+    return;
+  }
+
+  const magnitude = nearestEvent.magnitude === null ? "--" : nearestEvent.magnitude.toFixed(1);
+  elements.nearestLocation.textContent = nearestEvent.location;
+  elements.nearestDistance.textContent = `${nearestEvent.distance.toFixed(1)} km`;
+  elements.nearestDepth.textContent = nearestEvent.depth === null ? "--" : nearestEvent.depth.toLocaleString();
+  elements.nearestMagnitude.textContent = magnitude;
+  elements.magnitudeBadge.textContent = `M ${magnitude}`;
+  elements.homeLocationStatus.textContent = "Available";
+  elements.homeCoordinates.textContent = `${userLatitude.toFixed(4)}, ${userLongitude.toFixed(4)}`;
+  elements.homeNearestLocation.textContent = nearestEvent.location;
+  elements.homeNearestMag.textContent = `Magnitude ${magnitude}`;
+  elements.homeNearestDistance.textContent = `Distance ${nearestEvent.distance.toFixed(1)} km`;
+}
+
+function renderTimeline() {
+  elements.timelineCount.textContent = `${earthquakeEvents.length} event${earthquakeEvents.length === 1 ? "" : "s"}`;
+  if (!earthquakeEvents.length) {
+    elements.earthquakeList.innerHTML = '<div class="empty-state">No earthquake events are currently available.</div>';
+    return;
+  }
+
+  const list = [...earthquakeEvents];
+  if (userLatitude !== null && userLongitude !== null) {
+    list.sort((a, b) => {
+      const distanceA = a.distance === null ? Infinity : a.distance;
+      const distanceB = b.distance === null ? Infinity : b.distance;
+      return distanceA - distanceB;
+    });
+  } else {
+    list.sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
+  }
+
+  elements.earthquakeList.innerHTML = list.map(event => {
+    const magnitude = event.magnitude === null ? "--" : event.magnitude.toFixed(1);
+    const severity = event.magnitude >= 5 ? "severe" : event.magnitude >= 4 ? "strong" : "";
+    const distance = event.distance === null ? "Distance unavailable" : `${event.distance.toFixed(1)} km away`;
+    return `<button class="earthquake-item" type="button" data-event-id="${escapeHtml(event.id)}">
+      <span class="event-magnitude ${severity}">${magnitude}</span>
+      <span class="event-content"><strong>${escapeHtml(event.location)}</strong><span>${escapeHtml(formatDate(event.time))}</span><span>${escapeHtml(distance)} · Depth ${event.depth === null ? "unknown" : `${event.depth} km`}</span></span>
+      <span class="event-chevron">›</span>
+    </button>`;
+  }).join("");
+
+  elements.earthquakeList.querySelectorAll("[data-event-id]").forEach(button => {
+    button.addEventListener("click", () => selectEarthquake(button.dataset.eventId));
+  });
+}
+
+function selectEarthquake(eventId) {
+  const event = earthquakeEvents.find(item => item.id === eventId);
+  if (!event) return;
+  switchView("map-view");
+  if (earthquakeMap) {
+    earthquakeMap.setView([event.latitude, event.longitude], Math.max(earthquakeMap.getZoom(), 6), { animate: true });
+    const layer = earthquakeLayer.getLayers().find(marker => {
+      const position = marker.getLatLng();
+      return Math.abs(position.lat - event.latitude) < 0.000001 && Math.abs(position.lng - event.longitude) < 0.000001;
+    });
+    if (layer) layer.openPopup();
+  }
+  elements.nearestLocation.textContent = event.location;
+  elements.nearestDistance.textContent = event.distance === null ? "--" : `${event.distance.toFixed(1)} km`;
+  elements.nearestDepth.textContent = event.depth === null ? "--" : event.depth.toLocaleString();
+  elements.nearestMagnitude.textContent = event.magnitude === null ? "--" : event.magnitude.toFixed(1);
+  elements.magnitudeBadge.textContent = `M ${event.magnitude === null ? "--" : event.magnitude.toFixed(1)}`;
 }
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    const earthRadius = 6371;
-
-    const latDifference = degreesToRadians(lat2 - lat1);
-    const lonDifference = degreesToRadians(lon2 - lon1);
-
-    const a =
-        Math.sin(latDifference / 2) ** 2 +
-        Math.cos(degreesToRadians(lat1)) *
-        Math.cos(degreesToRadians(lat2)) *
-        Math.sin(lonDifference / 2) ** 2;
-
-    const c = 2 * Math.atan2(
-        Math.sqrt(a),
-        Math.sqrt(1 - a)
-    );
-
-    return earthRadius * c;
+  const earthRadius = 6371;
+  const latitudeDifference = degreesToRadians(lat2 - lat1);
+  const longitudeDifference = degreesToRadians(lon2 - lon1);
+  const a = Math.sin(latitudeDifference / 2) ** 2
+    + Math.cos(degreesToRadians(lat1)) * Math.cos(degreesToRadians(lat2))
+    * Math.sin(longitudeDifference / 2) ** 2;
+  const safeA = Math.min(1, Math.max(0, a));
+  return earthRadius * 2 * Math.atan2(Math.sqrt(safeA), Math.sqrt(1 - safeA));
 }
 
 function degreesToRadians(degrees) {
-    return degrees * (Math.PI / 180);
+  return degrees * (Math.PI / 180);
 }
 
-function displayNearestEarthquake(earthquake, distance) {
-    let earthquakeTime = earthquake.time;
+function getUserLocation() {
+  if (!navigator.geolocation) {
+    showToast("Geolocation is not supported by this device.");
+    return;
+  }
 
-    if (earthquake.time !== "Unknown") {
-        earthquakeTime = new Date(earthquake.time).toLocaleString();
-    }
+  showToast("Requesting your location…");
+  navigator.geolocation.getCurrentPosition(position => {
+    userLatitude = position.coords.latitude;
+    userLongitude = position.coords.longitude;
+    elements.coordinates.textContent = `${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)}`;
+    updateEventDistances();
+    renderMapMarkers();
+    renderNearestEarthquake();
+    renderTimeline();
 
-    document.getElementById("nearest-earthquake").innerHTML = `
-        <p><strong>Location:</strong> ${earthquake.location}</p>
-        <p><strong>Magnitude:</strong> ${earthquake.magnitude}</p>
-        <p><strong>Distance:</strong> ${distance.toFixed(2)} km</p>
-        <p><strong>Depth:</strong> ${earthquake.depth} km</p>
-        <p><strong>Latitude:</strong> ${earthquake.latitude.toFixed(6)}</p>
-        <p><strong>Longitude:</strong> ${earthquake.longitude.toFixed(6)}</p>
-        <p><strong>Date and Time:</strong> ${earthquakeTime}</p>
-    `;
+    if (earthquakeMap) earthquakeMap.setView([userLatitude, userLongitude], 6, { animate: true });
+    showToast("Your location was updated.");
+  }, error => {
+    console.error("Location error:", error);
+    const messages = {
+      1: "Location permission was denied. Allow location access in your browser or app settings.",
+      2: "Your location is currently unavailable. Please try again.",
+      3: "The location request timed out. Please try again."
+    };
+    showToast(messages[error.code] || "An unknown location error occurred.");
+  }, {
+    enableHighAccuracy: true,
+    timeout: 20000,
+    maximumAge: 30000
+  });
 }
+
+function switchView(viewId) {
+  const target = document.getElementById(viewId);
+  if (!target) return;
+  document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === viewId));
+  document.querySelectorAll(".nav-item").forEach(button => {
+    const active = button.dataset.view === viewId;
+    button.classList.toggle("active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+  elements.pageTitle.textContent = VIEW_TITLES[viewId] || "Earthquake Monitor";
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (viewId === "map-view" && earthquakeMap) {
+    window.setTimeout(() => earthquakeMap.invalidateSize(), 100);
+  }
+}
+
+function showToast(message) {
+  elements.toast.textContent = message;
+  elements.toast.classList.add("show");
+  window.clearTimeout(toastTimeout);
+  toastTimeout = window.setTimeout(() => elements.toast.classList.remove("show"), 3000);
+}
+
+// Used by the map pop-up buttons.
+window.selectEarthquake = selectEarthquake;
+
+document.querySelectorAll(".nav-item").forEach(button => {
+  button.addEventListener("click", () => switchView(button.dataset.view));
+});
+
+document.getElementById("locate-button").addEventListener("click", getUserLocation);
+document.getElementById("location-inline-button").addEventListener("click", getUserLocation);
+document.getElementById("home-locate-button").addEventListener("click", getUserLocation);
+document.getElementById("menu-locate-button").addEventListener("click", getUserLocation);
+document.getElementById("home-map-button").addEventListener("click", () => switchView("map-view"));
+elements.refreshButton.addEventListener("click", loadEarthquakeData);
+document.getElementById("timeline-refresh").addEventListener("click", loadEarthquakeData);
+document.getElementById("menu-refresh-button").addEventListener("click", loadEarthquakeData);
+
+initializeMap();
+loadEarthquakeData();
+
+// Leaflet needs a size refresh after the first responsive layout is painted.
+window.addEventListener("load", () => {
+  if (earthquakeMap) window.setTimeout(() => earthquakeMap.invalidateSize(), 150);
+});
+window.addEventListener("resize", () => {
+  if (earthquakeMap) earthquakeMap.invalidateSize({ pan: false });
+});
