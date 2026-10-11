@@ -1,96 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>Earthquake Alert</title>
-
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#080a0b">
+  <title>Earthquake Monitor</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="brand-copy">
+        <span class="eyebrow">EARTHQUAKE ALERT</span>
+        <h1 id="page-title">Earthquake Monitor</h1>
+      </div>
+      <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh earthquake data" title="Refresh data">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.8 9A7.5 7.5 0 0 1 18 6l2 6M4 17v-5h5m10.2 3A7.5 7.5 0 0 1 6 18l-2-6"/></svg>
+      </button>
+    </header>
 
-    <nav>
-        <ul>
-            <li>
-                <a href="#">Earthquake Alert</a>
-            </li>
-
-            <li class="hideonmobile">
-                <a href="#">Home</a>
-            </li>
-
-            <li class="hideonmobile">
-                <a href="#location">Location</a>
-            </li>
-
-            <li class="hideonmobile">
-                <a href="#earthquake">Earthquake</a>
-            </li>
-
-            <li class="menubutton">
-                <a href="#" onclick="showsideBar(); return false;">☰</a>
-            </li>
-        </ul>
-    </nav>
-
-    <div class="sidebar">
-        <ul>
-            <li>
-                <a href="#" onclick="hidesideBar(); return false;">✕</a>
-            </li>
-
-            <li>
-                <a href="#">Home</a>
-            </li>
-
-            <li>
-                <a href="#location">Location</a>
-            </li>
-
-            <li>
-                <a href="#earthquake">Earthquake</a>
-            </li>
-        </ul>
+    <div class="status-strip">
+      <span class="status-label"><i id="connection-dot" class="status-dot"></i><span id="connection-status">Connecting to earthquake data</span></span>
+      <span class="updated-label" id="last-updated">Waiting for update</span>
     </div>
 
-    <main>
+    <main class="main-content">
+      <section class="view active" id="map-view" aria-label="Earthquake map">
+        <div class="map-heading-row">
+          <div>
+            <p class="section-kicker">LIVE DATA VIEW</p>
+            <h2>Seismic activity</h2>
+          </div>
+          <button id="locate-button" class="location-button" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></svg>
+            <span>My location</span>
+          </button>
+        </div>
 
-        <section id="location" class="location-container">
-            <h1>Your Location</h1>
+        <div class="map-card">
+          <div id="earthquake-map" role="application" aria-label="Map showing earthquake locations"></div>
+          <div class="map-gradient" aria-hidden="true"></div>
+          <div class="map-overlay-top">
+            <div class="map-chip"><span class="pulse-dot"></span> EARTHQUAKE MAP</div>
+            <div class="map-chip map-count"><span id="event-count">0</span> events</div>
+          </div>
+          <div class="map-legend" aria-label="Magnitude legend">
+            <span><i class="legend-dot low"></i> 0–2</span>
+            <span><i class="legend-dot moderate"></i> 2–4</span>
+            <span><i class="legend-dot strong"></i> 4–5</span>
+            <span><i class="legend-dot severe"></i> 5+</span>
+          </div>
+          <div id="map-message" class="map-message" hidden>Loading earthquake data…</div>
+        </div>
 
-            <button onclick="getUserLocation()">
-                Get My Location
-            </button>
-
-            <p>
-                Latitude:
-                <span id="latitude">Not available</span>
-            </p>
-
-            <p>
-                Longitude:
-                <span id="longitude">Not available</span>
-            </p>
-        </section>
-
-        <section id="earthquake" class="earthquake-container">
-            <h1>Nearest Earthquake</h1>
-
-            <div id="nearest-earthquake">
-                <p>
-                    Get your location to retrieve
-                    the nearest earthquake.
-                </p>
+        <section class="nearest-card" aria-labelledby="nearest-title">
+          <div class="card-heading">
+            <div class="card-heading-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M3 12h4l2.2-6 4.1 12 2.2-6H21"/></svg>
             </div>
+            <div class="card-heading-copy">
+              <p class="section-kicker">CLOSEST REPORTED EVENT</p>
+              <h2 id="nearest-title">Nearest earthquake</h2>
+            </div>
+            <span id="magnitude-badge" class="magnitude-badge">M --</span>
+          </div>
+          <p id="nearest-location" class="nearest-location">Get your location to calculate the nearest reported earthquake.</p>
+          <div class="stats-grid">
+            <div class="stat-item"><span class="stat-label">Distance</span><strong id="nearest-distance">--</strong><span class="stat-unit">from you</span></div>
+            <div class="stat-item"><span class="stat-label">Depth</span><strong id="nearest-depth">--</strong><span class="stat-unit">kilometers</span></div>
+            <div class="stat-item"><span class="stat-label">Magnitude</span><strong id="nearest-magnitude">--</strong><span class="stat-unit">reported</span></div>
+          </div>
+          <div class="location-row">
+            <div class="location-row-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            </div>
+            <div class="location-coordinates"><span>Your coordinates</span><strong id="coordinates">Not available</strong></div>
+            <button id="location-inline-button" class="text-button" type="button">Locate</button>
+          </div>
+          <p class="data-note">Earthquake information reflects the latest data returned by the selected data service. It is not an earthquake early-warning guarantee.</p>
         </section>
+      </section>
 
+      <section class="view" id="timeline-view" aria-label="Recent earthquakes">
+        <div class="page-intro">
+          <p class="section-kicker">LATEST AVAILABLE DATA</p>
+          <h2>Earthquake timeline</h2>
+          <p>Recent reported events returned by the earthquake data service.</p>
+        </div>
+        <div class="timeline-toolbar">
+          <span id="timeline-count">0 events</span>
+          <button class="text-button" id="timeline-refresh" type="button">Refresh data</button>
+        </div>
+        <div id="earthquake-list" class="earthquake-list"><div class="empty-state">Loading earthquake events…</div></div>
+      </section>
+
+      <section class="view" id="weather-view" aria-label="Weather information">
+        <div class="page-intro">
+          <p class="section-kicker">WEATHER</p>
+          <h2>Local weather</h2>
+          <p>Weather information is not connected to this version of the application.</p>
+        </div>
+        <div class="info-panel">
+          <div class="info-icon" aria-hidden="true">☁</div>
+          <h3>Weather service not connected</h3>
+          <p>This screen is reserved for weather information. The current build retrieves earthquake data only.</p>
+        </div>
+      </section>
+
+      <section class="view" id="home-view" aria-label="Home summary">
+        <div class="page-intro">
+          <p class="section-kicker">OVERVIEW</p>
+          <h2>Your earthquake dashboard</h2>
+          <p>Check your location and review the latest reported seismic activity.</p>
+        </div>
+        <div class="overview-grid">
+          <div class="overview-tile"><span class="tile-label">Events loaded</span><strong id="home-event-count">0</strong><span class="tile-foot">available reports</span></div>
+          <div class="overview-tile"><span class="tile-label">Your location</span><strong id="home-location-status">Not set</strong><span class="tile-foot" id="home-coordinates">Tap locate to get coordinates</span></div>
+        </div>
+        <button class="primary-button full-width" id="home-locate-button" type="button">Get my location</button>
+        <button class="secondary-button full-width" id="home-map-button" type="button">Open earthquake map</button>
+        <section class="home-latest">
+          <p class="section-kicker">NEAREST REPORTED EVENT</p>
+          <h3 id="home-nearest-location">Location not available yet</h3>
+          <div class="home-latest-meta"><span id="home-nearest-mag">Magnitude --</span><span id="home-nearest-distance">Distance --</span></div>
+        </section>
+      </section>
+
+      <section class="view" id="menu-view" aria-label="Application menu">
+        <div class="page-intro">
+          <p class="section-kicker">PREFERENCES</p>
+          <h2>Menu</h2>
+          <p>Application tools and data information.</p>
+        </div>
+        <button class="menu-row" id="menu-locate-button" type="button"><span class="menu-row-icon">◎</span><span><strong>Update my location</strong><small>Request GPS coordinates from this device</small></span><span class="menu-chevron">›</span></button>
+        <button class="menu-row" id="menu-refresh-button" type="button"><span class="menu-row-icon">↻</span><span><strong>Refresh earthquake data</strong><small>Retrieve the latest available event reports</small></span><span class="menu-chevron">›</span></button>
+        <div class="source-panel"><p class="section-kicker">DATA SOURCE</p><h3>SeismicPortal / EMSC data service</h3><p>Displayed events depend on the records returned by the service and may be delayed or incomplete.</p></div>
+      </section>
     </main>
 
-    <script src="script.js"></script>
+    <nav class="bottom-nav" aria-label="Main navigation">
+      <button class="nav-item" type="button" data-view="home-view" aria-label="Home">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1Z"/></svg><span>Home</span>
+      </button>
+      <button class="nav-item" type="button" data-view="timeline-view" aria-label="Timeline">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5 10.5 15 16 9"/></svg><span>Timeline</span>
+      </button>
+      <button class="nav-item active" type="button" data-view="map-view" aria-label="Map">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15m6-12v15"/></svg><span>Map</span>
+      </button>
+      <button class="nav-item" type="button" data-view="weather-view" aria-label="Weather">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18a4 4 0 1 1 .3-8 5.5 5.5 0 0 1 10.6 1.5A3.5 3.5 0 0 1 18 18Z"/><path d="m8 21 1-2m4 2 1-2m4 2 1-2"/></svg><span>Weather</span>
+      </button>
+      <button class="nav-item" type="button" data-view="menu-view" aria-label="Menu">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span>
+      </button>
+    </nav>
+  </div>
 
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="script.js"></script>
 </body>
-
 </html>
