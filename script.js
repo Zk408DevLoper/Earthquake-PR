@@ -81,7 +81,7 @@ function initializeMap() {
     attributionControl: true,
     preferCanvas: true
   }).setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
-
+  
   L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
     subdomains: "abcd",
     maxZoom: 19,
