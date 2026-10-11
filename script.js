@@ -1,6 +1,29 @@
 "use strict";
 
-const EARTHQUAKE_API = "https://www.seismicportal.eu/fdsnws/event/1/query?format=json&limit=100&orderby=time-desc";
+const EARTHQUAKE_API_BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
+const EARTHQUAKE_SEARCH_RADIUS_KM = 100;
+
+function buildEarthquakeApiUrl() {
+  const parameters = new URLSearchParams({
+    format: "json",
+    limit: "100",
+    // SeismicPortal uses "time" for newest-first ordering.
+    orderby: "time"
+  });
+
+  // Once location is available, retrieve events around the device instead of
+  // relying only on the newest global records, which may not include nearby events.
+  if (userLatitude !== null && userLongitude !== null) {
+    parameters.set("latitude", userLatitude.toFixed(6));
+    parameters.set("longitude", userLongitude.toFixed(6));
+    parameters.set(
+      "maxradius",
+      (EARTHQUAKE_SEARCH_RADIUS_KM / 111.195).toFixed(4)
+    );
+  }
+
+  return `${EARTHQUAKE_API_BASE}?${parameters.toString()}`;
+}
 const DEFAULT_MAP_CENTER = [12.8797, 121.7740];
 const DEFAULT_MAP_ZOOM = 5;
 
@@ -12,6 +35,7 @@ let userLongitude = null;
 let earthquakeEvents = [];
 let nearestEvent = null;
 let toastTimeout;
+let activeFetchController = null;
 
 const elements = {
   pageTitle: document.getElementById("page-title"),
@@ -42,7 +66,6 @@ const VIEW_TITLES = {
   "home-view": "Home",
   "timeline-view": "Earthquake Timeline",
   "map-view": "Earthquake Monitor",
-  "weather-view": "Weather",
   "menu-view": "Menu"
 };
 
@@ -127,17 +150,22 @@ function eventFromFeature(feature, index) {
   };
 }
 
-async function loadEarthquakeData() {
+async function loadEarthquakeData(showFeedback = false) {
+  if (activeFetchController) activeFetchController.abort();
+  activeFetchController = new AbortController();
+  const fetchController = activeFetchController;
+
   setConnectionState("loading", "Retrieving earthquake data…");
   elements.mapMessage.hidden = false;
   elements.mapMessage.textContent = "Loading earthquake data…";
   elements.refreshButton.classList.add("is-loading");
 
   try {
-    const response = await fetch(EARTHQUAKE_API, {
+    const response = await fetch(buildEarthquakeApiUrl(), {
       method: "GET",
       headers: { "Accept": "application/json" },
-      cache: "no-store"
+      cache: "no-store",
+      signal: fetchController.signal
     });
     if (!response.ok) throw new Error(`Earthquake service returned HTTP ${response.status}`);
 
@@ -156,15 +184,20 @@ async function loadEarthquakeData() {
     setConnectionState("online", "Earthquake data connected");
     elements.mapMessage.hidden = earthquakeEvents.length > 0;
     if (!earthquakeEvents.length) elements.mapMessage.textContent = "No earthquake events were returned.";
+    if (showFeedback) showToast(`Earthquake data refreshed (${earthquakeEvents.length} events).`);
   } catch (error) {
+    if (error && error.name === "AbortError") return;
     console.error("Earthquake retrieval error:", error);
     setConnectionState("error", "Unable to retrieve earthquake data");
     elements.mapMessage.hidden = false;
     elements.mapMessage.textContent = "Unable to load earthquake data. Check your internet connection and try again.";
     elements.earthquakeList.innerHTML = '<div class="empty-state">Earthquake data could not be retrieved. Check your connection and try again.</div>';
-    showToast("Could not retrieve earthquake data. Please try again.");
+    if (showFeedback) showToast("Could not retrieve earthquake data. Check your connection and try again.");
   } finally {
-    elements.refreshButton.classList.remove("is-loading");
+    if (activeFetchController === fetchController) {
+      activeFetchController = null;
+      elements.refreshButton.classList.remove("is-loading");
+    }
   }
 }
 
@@ -304,9 +337,6 @@ function renderTimeline() {
     </button>`;
   }).join("");
 
-  elements.earthquakeList.querySelectorAll("[data-event-id]").forEach(button => {
-    button.addEventListener("click", () => selectEarthquake(button.dataset.eventId));
-  });
 }
 
 function selectEarthquake(eventId) {
@@ -350,7 +380,7 @@ function getUserLocation() {
   }
 
   showToast("Requesting your location…");
-  navigator.geolocation.getCurrentPosition(position => {
+  navigator.geolocation.getCurrentPosition(async position => {
     userLatitude = position.coords.latitude;
     userLongitude = position.coords.longitude;
     elements.coordinates.textContent = `${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)}`;
@@ -359,7 +389,12 @@ function getUserLocation() {
     renderNearestEarthquake();
     renderTimeline();
 
-    if (earthquakeMap) earthquakeMap.setView([userLatitude, userLongitude], 6, { animate: true });
+    if (earthquakeMap) earthquakeMap.setView([userLatitude, userLongitude], 7, { animate: true });
+
+    // Re-query the EMSC catalogue around the new location so the nearest event
+    // isn't limited to the newest 100 events worldwide.
+    showToast("Location found. Looking for nearby earthquakes…");
+    await loadEarthquakeData();
     showToast("Your location was updated.");
   }, error => {
     console.error("Location error:", error);
@@ -403,18 +438,43 @@ function showToast(message) {
 // Used by the map pop-up buttons.
 window.selectEarthquake = selectEarthquake;
 
-document.querySelectorAll(".nav-item").forEach(button => {
-  button.addEventListener("click", () => switchView(button.dataset.view));
-});
+// One delegated click handler keeps controls working after the view changes or
+// when timeline rows are dynamically created. It also works when the user taps
+// an icon or label inside a button in Android WebView.
+document.addEventListener("click", event => {
+  const button = event.target && event.target.closest ? event.target.closest("button") : null;
+  if (!button || button.disabled) return;
 
-document.getElementById("locate-button").addEventListener("click", getUserLocation);
-document.getElementById("location-inline-button").addEventListener("click", getUserLocation);
-document.getElementById("home-locate-button").addEventListener("click", getUserLocation);
-document.getElementById("menu-locate-button").addEventListener("click", getUserLocation);
-document.getElementById("home-map-button").addEventListener("click", () => switchView("map-view"));
-elements.refreshButton.addEventListener("click", loadEarthquakeData);
-document.getElementById("timeline-refresh").addEventListener("click", loadEarthquakeData);
-document.getElementById("menu-refresh-button").addEventListener("click", loadEarthquakeData);
+  if (button.classList.contains("nav-item")) {
+    const viewId = button.dataset.view;
+    if (viewId) switchView(viewId);
+    return;
+  }
+
+  if (button.dataset.eventId) {
+    selectEarthquake(button.dataset.eventId);
+    return;
+  }
+
+  switch (button.id) {
+    case "locate-button":
+    case "location-inline-button":
+    case "home-locate-button":
+    case "menu-locate-button":
+      getUserLocation();
+      break;
+    case "refresh-button":
+    case "timeline-refresh":
+    case "menu-refresh-button":
+      loadEarthquakeData(true);
+      break;
+    case "home-map-button":
+      switchView("map-view");
+      break;
+    default:
+      break;
+  }
+});
 
 initializeMap();
 loadEarthquakeData();
@@ -425,4 +485,10 @@ window.addEventListener("load", () => {
 });
 window.addEventListener("resize", () => {
   if (earthquakeMap) earthquakeMap.invalidateSize({ pan: false });
+});
+
+// Make runtime errors visible during testing instead of leaving the user with
+// buttons that appear to do nothing. Details remain available in browser Logcat.
+window.addEventListener("error", event => {
+  console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });

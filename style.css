@@ -20,7 +20,7 @@
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--bg); scroll-behavior: smooth; }
 body { margin: 0; min-height: 100vh; min-height: 100dvh; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
-button { font: inherit; }
+button { font: inherit; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .app-shell { min-height: 100vh; min-height: 100dvh; padding-bottom: calc(83px + env(safe-area-inset-bottom)); }
 .topbar { height: 66px; padding: 0 18px; display: flex; align-items: center; gap: 12px; background: #090b0c; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1000; }
@@ -102,7 +102,7 @@ button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 .location-coordinates strong { font-size: 10px; font-weight: 650; overflow-wrap: anywhere; }
 .text-button { padding: 7px 9px; border: 0; background: transparent; color: #65dce9; font-size: 11px; font-weight: 750; cursor: pointer; }
 .data-note { margin: 13px 0 0; color: var(--subtle); font-size: 9px; line-height: 1.5; }
-.bottom-nav { position: fixed; z-index: 1100; left: 0; right: 0; bottom: 0; min-height: calc(67px + env(safe-area-inset-bottom)); padding: 7px max(8px, env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); align-items: center; background: rgba(12,15,16,.96); border-top: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(18px); }
+.bottom-nav { position: fixed; z-index: 1100; left: 0; right: 0; bottom: 0; min-height: calc(67px + env(safe-area-inset-bottom)); padding: 7px max(8px, env(safe-area-inset-right)) calc(7px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); align-items: center; background: rgba(12,15,16,.96); border-top: 1px solid rgba(255,255,255,.1); backdrop-filter: blur(18px); }
 .nav-item { min-width: 0; min-height: 51px; padding: 3px 0 1px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 0; border-radius: 12px; color: #838d8f; background: transparent; cursor: pointer; }
 .nav-item svg { width: 21px; height: 21px; }
 .nav-item span { font-size: 9px; font-weight: 600; }
