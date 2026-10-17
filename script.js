@@ -3,6 +3,11 @@
 const EARTHQUAKE_API_BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
 const EARTHQUAKE_SEARCH_RADIUS_KM = 100;
 
+// Auto-update settings
+const AUTO_REFRESH_MS = 60 * 1000;   // reload earthquake data every 60 seconds
+const MOVE_THRESHOLD_KM = 0.03;      // ignore GPS jitter smaller than ~30 m
+const REFETCH_DISTANCE_KM = 5;       // re-query the catalogue after moving this far
+
 function buildEarthquakeApiUrl() {
   const parameters = new URLSearchParams({
     format: "json",
@@ -37,6 +42,11 @@ let nearestEvent = null;
 let toastTimeout;
 let activeFetchController = null;
 
+let locationWatchId = null;
+let lastFetchLatitude = null;
+let lastFetchLongitude = null;
+let locationErrorShown = false;
+
 const elements = {
   pageTitle: document.getElementById("page-title"),
   connectionDot: document.getElementById("connection-dot"),
@@ -58,8 +68,7 @@ const elements = {
   homeNearestLocation: document.getElementById("home-nearest-location"),
   homeNearestMag: document.getElementById("home-nearest-mag"),
   homeNearestDistance: document.getElementById("home-nearest-distance"),
-  toast: document.getElementById("toast"),
-  refreshButton: document.getElementById("refresh-button")
+  toast: document.getElementById("toast")
 };
 
 const VIEW_TITLES = {
@@ -81,8 +90,8 @@ function initializeMap() {
     attributionControl: true,
     preferCanvas: true
   }).setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
-  
-const CARTO_BASEMAP_KEY = "cb1_4h23_1_8287814bc1d518fc7b5aae2d";
+
+  const CARTO_BASEMAP_KEY = "cb1_4h23_1_8287814bc1d518fc7b5aae2d";
 
   L.tileLayer(`https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=${CARTO_BASEMAP_KEY}`, {
     subdomains: "abcd",
@@ -152,15 +161,22 @@ function eventFromFeature(feature, index) {
   };
 }
 
-async function loadEarthquakeData(showFeedback = false) {
+// silent = true: background refresh. No loading banner and existing data
+// stays on screen if the request fails.
+async function loadEarthquakeData({ silent = false } = {}) {
   if (activeFetchController) activeFetchController.abort();
   activeFetchController = new AbortController();
   const fetchController = activeFetchController;
 
-  setConnectionState("loading", "Retrieving earthquake data…");
-  elements.mapMessage.hidden = false;
-  elements.mapMessage.textContent = "Loading earthquake data…";
-  elements.refreshButton.classList.add("is-loading");
+  // Remember where this query was centred so we know when to re-query.
+  const requestLatitude = userLatitude;
+  const requestLongitude = userLongitude;
+
+  if (!silent) {
+    setConnectionState("loading", "Retrieving earthquake data…");
+    elements.mapMessage.hidden = false;
+    elements.mapMessage.textContent = "Loading earthquake data…";
+  }
 
   try {
     const response = await fetch(buildEarthquakeApiUrl(), {
@@ -175,6 +191,10 @@ async function loadEarthquakeData(showFeedback = false) {
     if (!data || !Array.isArray(data.features)) throw new Error("The earthquake service returned an unexpected response.");
 
     earthquakeEvents = data.features.map(eventFromFeature).filter(Boolean);
+    lastFetchLatitude = requestLatitude;
+    lastFetchLongitude = requestLongitude;
+
+    // Use the newest GPS position, which may have changed while fetching.
     if (userLatitude !== null && userLongitude !== null) updateEventDistances();
 
     renderMapMarkers();
@@ -186,19 +206,20 @@ async function loadEarthquakeData(showFeedback = false) {
     setConnectionState("online", "Earthquake data connected");
     elements.mapMessage.hidden = earthquakeEvents.length > 0;
     if (!earthquakeEvents.length) elements.mapMessage.textContent = "No earthquake events were returned.";
-    if (showFeedback) showToast(`Earthquake data refreshed (${earthquakeEvents.length} events).`);
   } catch (error) {
     if (error && error.name === "AbortError") return;
     console.error("Earthquake retrieval error:", error);
     setConnectionState("error", "Unable to retrieve earthquake data");
-    elements.mapMessage.hidden = false;
-    elements.mapMessage.textContent = "Unable to load earthquake data. Check your internet connection and try again.";
-    elements.earthquakeList.innerHTML = '<div class="empty-state">Earthquake data could not be retrieved. Check your connection and try again.</div>';
-    if (showFeedback) showToast("Could not retrieve earthquake data. Check your connection and try again.");
+
+    // Only replace the screen content if there is nothing to show yet.
+    if (!earthquakeEvents.length) {
+      elements.mapMessage.hidden = false;
+      elements.mapMessage.textContent = "Unable to load earthquake data. Retrying automatically…";
+      elements.earthquakeList.innerHTML = '<div class="empty-state">Earthquake data could not be retrieved. Retrying automatically…</div>';
+    }
   } finally {
     if (activeFetchController === fetchController) {
       activeFetchController = null;
-      elements.refreshButton.classList.remove("is-loading");
     }
   }
 }
@@ -252,13 +273,22 @@ function renderMapMarkers() {
     marker.addTo(earthquakeLayer);
   });
 
-  if (userLatitude !== null && userLongitude !== null) {
-    if (userMarker && earthquakeMap.hasLayer(userMarker)) earthquakeMap.removeLayer(userMarker);
-    const icon = L.divIcon({ className: "", html: '<div class="user-marker"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
-    userMarker = L.marker([userLatitude, userLongitude], { icon, title: "Your location", zIndexOffset: 1000 })
-      .bindPopup("<strong>Your location</strong><br>GPS coordinates from this device")
-      .addTo(earthquakeMap);
+  updateUserMarker();
+}
+
+// Moves the blue "you are here" dot without rebuilding the earthquake markers.
+function updateUserMarker() {
+  if (!earthquakeMap || userLatitude === null || userLongitude === null) return;
+
+  if (userMarker) {
+    userMarker.setLatLng([userLatitude, userLongitude]);
+    return;
   }
+
+  const icon = L.divIcon({ className: "", html: '<div class="user-marker"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
+  userMarker = L.marker([userLatitude, userLongitude], { icon, title: "Your location", zIndexOffset: 1000 })
+    .bindPopup("<strong>Your location</strong><br>GPS coordinates from this device")
+    .addTo(earthquakeMap);
 }
 
 function updateEventDistances() {
@@ -272,18 +302,21 @@ function updateEventDistances() {
 
 function renderNearestEarthquake() {
   if (userLatitude === null || userLongitude === null) {
-    elements.nearestLocation.textContent = "Get your location to calculate the nearest reported earthquake.";
+    elements.nearestLocation.textContent = "Waiting for your location to calculate the nearest reported earthquake.";
     elements.nearestDistance.textContent = "--";
     elements.nearestDepth.textContent = "--";
     elements.nearestMagnitude.textContent = "--";
     elements.magnitudeBadge.textContent = "M --";
     elements.homeLocationStatus.textContent = "Not set";
-    elements.homeCoordinates.textContent = "Tap locate to get coordinates";
+    elements.homeCoordinates.textContent = "Waiting for GPS…";
     elements.homeNearestLocation.textContent = "Location not available yet";
     elements.homeNearestMag.textContent = "Magnitude --";
     elements.homeNearestDistance.textContent = "Distance --";
     return;
   }
+
+  elements.homeLocationStatus.textContent = "Available";
+  elements.homeCoordinates.textContent = `${userLatitude.toFixed(4)}, ${userLongitude.toFixed(4)}`;
 
   if (!nearestEvent) {
     elements.nearestLocation.textContent = "No earthquake location is available in the retrieved records.";
@@ -303,8 +336,6 @@ function renderNearestEarthquake() {
   elements.nearestDepth.textContent = nearestEvent.depth === null ? "--" : nearestEvent.depth.toLocaleString();
   elements.nearestMagnitude.textContent = magnitude;
   elements.magnitudeBadge.textContent = `M ${magnitude}`;
-  elements.homeLocationStatus.textContent = "Available";
-  elements.homeCoordinates.textContent = `${userLatitude.toFixed(4)}, ${userLongitude.toFixed(4)}`;
   elements.homeNearestLocation.textContent = nearestEvent.location;
   elements.homeNearestMag.textContent = `Magnitude ${magnitude}`;
   elements.homeNearestDistance.textContent = `Distance ${nearestEvent.distance.toFixed(1)} km`;
@@ -375,42 +406,100 @@ function degreesToRadians(degrees) {
   return degrees * (Math.PI / 180);
 }
 
-function getUserLocation() {
+/* ---------- Live GPS ---------- */
+
+function handlePositionUpdate(position) {
+  const latitude = position.coords.latitude;
+  const longitude = position.coords.longitude;
+  const isFirstFix = userLatitude === null || userLongitude === null;
+  locationErrorShown = false;
+
+  // Ignore tiny GPS jitter so the screen doesn't redraw constantly.
+  if (!isFirstFix && calculateDistance(userLatitude, userLongitude, latitude, longitude) < MOVE_THRESHOLD_KM) {
+    return;
+  }
+
+  userLatitude = latitude;
+  userLongitude = longitude;
+  elements.coordinates.textContent = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+
+  const previousNearestId = nearestEvent ? nearestEvent.id : null;
+  updateEventDistances();
+  updateUserMarker();
+
+  // Only rebuild the earthquake markers when the nearest event changed,
+  // so an open pop-up isn't closed by every GPS update.
+  const currentNearestId = nearestEvent ? nearestEvent.id : null;
+  if (currentNearestId !== previousNearestId) renderMapMarkers();
+
+  renderNearestEarthquake();
+  renderTimeline();
+
+  // Centre the map on the user once, at the first fix.
+  if (isFirstFix && earthquakeMap) {
+    earthquakeMap.setView([latitude, longitude], 7, { animate: true });
+  }
+
+  // Re-query the catalogue around the new location on the first fix and
+  // whenever the user has moved far from the last query centre.
+  const needsRefetch = isFirstFix
+    || lastFetchLatitude === null
+    || lastFetchLongitude === null
+    || calculateDistance(lastFetchLatitude, lastFetchLongitude, latitude, longitude) >= REFETCH_DISTANCE_KM;
+  if (needsRefetch) loadEarthquakeData({ silent: true });
+}
+
+function handleLocationError(error) {
+  console.error("Location error:", error);
+
+  const messages = {
+    1: "Location permission was denied. Allow location access in your app settings.",
+    2: "Your location is currently unavailable.",
+    3: "Location request timed out. Still trying…"
+  };
+
+  // Show each problem once, not on every failed attempt.
+  if (!locationErrorShown) {
+    locationErrorShown = true;
+    showToast(messages[error.code] || "An unknown location error occurred.");
+  }
+
+  // A denied permission ends the watch; clear it so it can be restarted later.
+  if (error.code === 1 && locationWatchId !== null) {
+    navigator.geolocation.clearWatch(locationWatchId);
+    locationWatchId = null;
+  }
+}
+
+function startLocationWatch() {
   if (!navigator.geolocation) {
     showToast("Geolocation is not supported by this device.");
     return;
   }
+  if (locationWatchId !== null) return; // already watching
 
-  showToast("Requesting your location…");
-  navigator.geolocation.getCurrentPosition(async position => {
-    userLatitude = position.coords.latitude;
-    userLongitude = position.coords.longitude;
-    elements.coordinates.textContent = `${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)}`;
-    updateEventDistances();
-    renderMapMarkers();
-    renderNearestEarthquake();
-    renderTimeline();
+  locationWatchId = navigator.geolocation.watchPosition(
+    handlePositionUpdate,
+    handleLocationError,
+    {
+      enableHighAccuracy: true,
+      timeout: 20000,
+      maximumAge: 10000
+    }
+  );
+}
 
-    if (earthquakeMap) earthquakeMap.setView([userLatitude, userLongitude], 7, { animate: true });
-
-    // Re-query the EMSC catalogue around the new location so the nearest event
-    // isn't limited to the newest 100 events worldwide.
-    showToast("Location found. Looking for nearby earthquakes…");
-    await loadEarthquakeData();
-    showToast("Your location was updated.");
-  }, error => {
-    console.error("Location error:", error);
-    const messages = {
-      1: "Location permission was denied. Allow location access in your browser or app settings.",
-      2: "Your location is currently unavailable. Please try again.",
-      3: "The location request timed out. Please try again."
-    };
-    showToast(messages[error.code] || "An unknown location error occurred.");
-  }, {
-    enableHighAccuracy: true,
-    timeout: 20000,
-    maximumAge: 30000
-  });
+// "My location" button: re-centre the map on the live position.
+function recenterOnUser() {
+  if (userLatitude === null || userLongitude === null) {
+    showToast("Waiting for your location…");
+    startLocationWatch();
+    return;
+  }
+  switchView("map-view");
+  if (earthquakeMap) {
+    earthquakeMap.setView([userLatitude, userLongitude], Math.max(earthquakeMap.getZoom(), 7), { animate: true });
+  }
 }
 
 function switchView(viewId) {
@@ -460,15 +549,7 @@ document.addEventListener("click", event => {
 
   switch (button.id) {
     case "locate-button":
-    case "location-inline-button":
-    case "home-locate-button":
-    case "menu-locate-button":
-      getUserLocation();
-      break;
-    case "refresh-button":
-    case "timeline-refresh":
-    case "menu-refresh-button":
-      loadEarthquakeData(true);
+      recenterOnUser();
       break;
     case "home-map-button":
       switchView("map-view");
@@ -480,6 +561,22 @@ document.addEventListener("click", event => {
 
 initializeMap();
 loadEarthquakeData();
+startLocationWatch();
+
+// Automatic refresh: runs while the app is on screen. It also restarts the
+// GPS watch if it was stopped (for example after permission was granted late).
+window.setInterval(() => {
+  if (document.hidden) return;
+  startLocationWatch();
+  loadEarthquakeData({ silent: true });
+}, AUTO_REFRESH_MS);
+
+// Refresh immediately when the app comes back to the foreground.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) return;
+  startLocationWatch();
+  loadEarthquakeData({ silent: true });
+});
 
 // Leaflet needs a size refresh after the first responsive layout is painted.
 window.addEventListener("load", () => {
