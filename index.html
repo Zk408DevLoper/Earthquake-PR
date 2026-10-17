@@ -16,9 +16,6 @@
         <span class="eyebrow">EARTHQUAKE ALERT</span>
         <h1 id="page-title">Earthquake Monitor</h1>
       </div>
-      <button class="icon-button" id="refresh-button" type="button" aria-label="Refresh earthquake data" title="Refresh data">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7v5h-5M4.8 9A7.5 7.5 0 0 1 18 6l2 6M4 17v-5h5m10.2 3A7.5 7.5 0 0 1 6 18l-2-6"/></svg>
-      </button>
     </header>
 
     <div class="status-strip">
@@ -66,7 +63,7 @@
             </div>
             <span id="magnitude-badge" class="magnitude-badge">M --</span>
           </div>
-          <p id="nearest-location" class="nearest-location">Get your location to calculate the nearest reported earthquake.</p>
+          <p id="nearest-location" class="nearest-location">Waiting for your location to calculate the nearest reported earthquake.</p>
           <div class="stats-grid">
             <div class="stat-item"><span class="stat-label">Distance</span><strong id="nearest-distance">--</strong><span class="stat-unit">from you</span></div>
             <div class="stat-item"><span class="stat-label">Depth</span><strong id="nearest-depth">--</strong><span class="stat-unit">kilometers</span></div>
@@ -76,8 +73,7 @@
             <div class="location-row-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
             </div>
-            <div class="location-coordinates"><span>Your coordinates</span><strong id="coordinates">Not available</strong></div>
-            <button id="location-inline-button" class="text-button" type="button">Locate</button>
+            <div class="location-coordinates"><span>Your coordinates (live)</span><strong id="coordinates">Waiting for GPS…</strong></div>
           </div>
           <p class="data-note">Earthquake information reflects the latest data returned by the selected data service. It is not an earthquake early-warning guarantee.</p>
         </section>
@@ -87,27 +83,24 @@
         <div class="page-intro">
           <p class="section-kicker">LATEST AVAILABLE DATA</p>
           <h2>Earthquake timeline</h2>
-          <p>Recent reported events returned by the earthquake data service.</p>
+          <p>Recent reported events returned by the earthquake data service. This list updates automatically.</p>
         </div>
         <div class="timeline-toolbar">
           <span id="timeline-count">0 events</span>
-          <button class="text-button" id="timeline-refresh" type="button">Refresh data</button>
         </div>
         <div id="earthquake-list" class="earthquake-list"><div class="empty-state">Loading earthquake events…</div></div>
       </section>
-
 
       <section class="view" id="home-view" aria-label="Home summary">
         <div class="page-intro">
           <p class="section-kicker">OVERVIEW</p>
           <h2>Your earthquake dashboard</h2>
-          <p>Check your location and review the latest reported seismic activity.</p>
+          <p>Your location and the latest reported seismic activity update automatically.</p>
         </div>
         <div class="overview-grid">
           <div class="overview-tile"><span class="tile-label">Events loaded</span><strong id="home-event-count">0</strong><span class="tile-foot">available reports</span></div>
-          <div class="overview-tile"><span class="tile-label">Your location</span><strong id="home-location-status">Not set</strong><span class="tile-foot" id="home-coordinates">Tap locate to get coordinates</span></div>
+          <div class="overview-tile"><span class="tile-label">Your location</span><strong id="home-location-status">Not set</strong><span class="tile-foot" id="home-coordinates">Waiting for GPS…</span></div>
         </div>
-        <button class="primary-button full-width" id="home-locate-button" type="button">Get my location</button>
         <button class="secondary-button full-width" id="home-map-button" type="button">Open earthquake map</button>
         <section class="home-latest">
           <p class="section-kicker">NEAREST REPORTED EVENT</p>
@@ -120,10 +113,8 @@
         <div class="page-intro">
           <p class="section-kicker">PREFERENCES</p>
           <h2>Menu</h2>
-          <p>Application tools and data information.</p>
+          <p>Data information. Location and earthquake data update automatically.</p>
         </div>
-        <button class="menu-row" id="menu-locate-button" type="button"><span class="menu-row-icon">◎</span><span><strong>Update my location</strong><small>Request GPS coordinates from this device</small></span><span class="menu-chevron">›</span></button>
-        <button class="menu-row" id="menu-refresh-button" type="button"><span class="menu-row-icon">↻</span><span><strong>Refresh earthquake data</strong><small>Retrieve the latest available event reports</small></span><span class="menu-chevron">›</span></button>
         <div class="source-panel"><p class="section-kicker">DATA SOURCE</p><h3>SeismicPortal / EMSC data service</h3><p>Displayed events depend on the records returned by the service and may be delayed or incomplete.</p></div>
       </section>
     </main>
@@ -146,6 +137,6 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="script.js?v=3"></script>
+  <script src="script.js?v=4"></script>
 </body>
 </html>
