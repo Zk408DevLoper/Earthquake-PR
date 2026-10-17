@@ -561,6 +561,17 @@ document.addEventListener("click", event => {
     return;
   }
 
+  case "test-button":
+    if (
+        window.AndroidBridge &&
+        typeof window.AndroidBridge.goHomeAndTest === "function"
+    ) {
+        window.AndroidBridge.goHomeAndTest();
+    } else {
+        showToast("Notification testing is only available in the Android app.");
+    }
+    break;
+  
   if (button.id === "home-map-button") {
     switchView("map-view");
   }
