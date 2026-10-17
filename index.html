@@ -4,9 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#080a0b">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <title>Earthquake Monitor</title>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=3">
+  <link rel="stylesheet" href="style.css?v=4">
 </head>
 <body>
   <div class="app-shell">
@@ -136,7 +139,25 @@
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="script.js?v=4"></script>
+  <script>
+    // Show any script problem in the status bar so it is visible inside the app.
+    function showStartupProblem(message) {
+      var el = document.getElementById("connection-status");
+      if (el) el.textContent = message;
+    }
+    window.addEventListener("error", function (e) {
+      showStartupProblem("Script error: " + e.message);
+    });
+
+    // Load script.js with a changing URL so the WebView can never use a stale copy.
+    (function () {
+      var s = document.createElement("script");
+      s.src = "script.js?t=" + Date.now();
+      s.onerror = function () { showStartupProblem("Could not load script.js"); };
+      document.body.appendChild(s);
+    })();
+  </script>
 </body>
 </html>
