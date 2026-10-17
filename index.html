@@ -141,14 +141,15 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script>
+    <script>
     // Show any script problem in the status bar so it is visible inside the app.
     function showStartupProblem(message) {
       var el = document.getElementById("connection-status");
       if (el) el.textContent = message;
     }
     window.addEventListener("error", function (e) {
-      showStartupProblem("Script error: " + e.message);
+      var file = (e.filename || "").split("/").pop().split("?")[0];
+      showStartupProblem("Script error: " + e.message + " (" + file + " line " + e.lineno + ")");
     });
 
     // Load script.js with a changing URL so the WebView can never use a stale copy.
