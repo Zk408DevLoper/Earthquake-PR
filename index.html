@@ -118,6 +118,14 @@
           <h2>Menu</h2>
           <p>Data information. Location and earthquake data update automatically.</p>
         </div>
+
+        <!-- Only shown inside the Android app. Remove after testing. -->
+        <button class="menu-row" id="test-notification-button" type="button" style="display:none">
+          <span class="menu-row-icon">🔔</span>
+          <span><strong>Test notification</strong><small>Goes to your home screen, then sends a simulated old earthquake alert</small></span>
+          <span class="menu-chevron">›</span>
+        </button>
+
         <div class="source-panel"><p class="section-kicker">DATA SOURCE</p><h3>SeismicPortal / EMSC data service</h3><p>Displayed events depend on the records returned by the service and may be delayed or incomplete.</p></div>
       </section>
     </main>
@@ -141,7 +149,7 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
+  <script>
     // Show any script problem in the status bar so it is visible inside the app.
     function showStartupProblem(message) {
       var el = document.getElementById("connection-status");
@@ -151,6 +159,17 @@
       var file = (e.filename || "").split("/").pop().split("?")[0];
       showStartupProblem("Script error: " + e.message + " (" + file + " line " + e.lineno + ")");
     });
+
+    // Test notification button: only works inside the Android app.
+    (function () {
+      var button = document.getElementById("test-notification-button");
+      if (button && window.AndroidBridge && typeof window.AndroidBridge.goHomeAndTest === "function") {
+        button.style.display = "flex";
+        button.addEventListener("click", function () {
+          window.AndroidBridge.goHomeAndTest();
+        });
+      }
+    })();
 
     // Load script.js with a changing URL so the WebView can never use a stale copy.
     (function () {
