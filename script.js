@@ -4,7 +4,7 @@ const EARTHQUAKE_API_BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
 const EARTHQUAKE_SEARCH_RADIUS_KM = 100;
 
 // Auto-update settings
-const AUTO_REFRESH_MS = 60 * 1000;     // reload earthquake data every 60 seconds
+const AUTO_REFRESH_MS = 30 * 1000;     // reload earthquake data every 30 seconds 
 const MOVE_THRESHOLD_KM = 0.03;        // ignore GPS jitter smaller than ~30 m
 const REFETCH_DISTANCE_KM = 5;         // re-query the catalogue after moving this far
 const FOLLOW_RESUME_MS = 30 * 1000;    // resume following the user this long after a manual map drag
