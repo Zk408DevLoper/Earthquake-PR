@@ -9,21 +9,23 @@
   <meta http-equiv="Expires" content="0">
   <title>Earthquake Monitor</title>
   <script>
-    // Apply the saved theme color immediately, so there is no flash of the default color.
+    // Apply the saved theme immediately, so there is no flash of the default colors.
     (function () {
       try {
-        var saved = JSON.parse(window.localStorage.getItem("eq_theme_vars") || "null");
-        if (saved && saved.accent && saved.rgb && saved.light) {
+        var saved = JSON.parse(window.localStorage.getItem("eq_theme_css_v2") || "null");
+        if (saved) {
           var rootStyle = document.documentElement.style;
-          rootStyle.setProperty("--accent", saved.accent);
-          rootStyle.setProperty("--accent-rgb", saved.rgb);
-          rootStyle.setProperty("--accent-light", saved.light);
+          for (var name in saved) {
+            if (Object.prototype.hasOwnProperty.call(saved, name) && name.indexOf("--") === 0) {
+              rootStyle.setProperty(name, saved[name]);
+            }
+          }
         }
       } catch (e) {}
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=5">
+  <link rel="stylesheet" href="style.css?v=6">
 </head>
 <body>
   <div class="app-shell">
@@ -145,9 +147,9 @@
         <section class="settings-panel" aria-labelledby="settings-title">
           <p class="section-kicker">SETTINGS</p>
           <h3 id="settings-title">Theme color</h3>
-          <p class="settings-hint">Choose the accent color used across the app.</p>
+          <p class="settings-hint">Choose a theme. It changes the background and the accent colors. Classic is the original look.</p>
           <div id="theme-swatches" class="swatch-row" role="group" aria-label="Theme color"></div>
-          <p class="settings-hint">Current color: <strong id="theme-current-name">Cyan</strong></p>
+          <p class="settings-hint">Current theme: <strong id="theme-current-name">Classic</strong></p>
         </section>
 
         <div class="source-panel"><p class="section-kicker">DATA SOURCE</p><h3>SeismicPortal / EMSC data service</h3><p>Displayed events depend on the records returned by the service and may be delayed or incomplete.</p></div>
@@ -164,7 +166,7 @@
           <p class="section-kicker">THE TEAM</p>
           <h3>Made by</h3>
           <!-- Replace the names and roles below. Copy a whole <li> block to add more people. -->
-          <ul class="member-list">
+           <ul class="member-list">
             <li class="member-card">
               <span class="member-avatar">1</span>
               <span class="member-info"><strong>Juan Miguel Galora</strong><small>Research Leader</small></span>
@@ -188,12 +190,12 @@
           <p class="section-kicker">APP INFO</p>
           <h3>Details</h3>
           <dl class="info-list">
-            <div><dt>Version</dt><dd>3.1</dd></div>
+            <div><dt>Version</dt><dd>1.0</dd></div>
             <div><dt>Earthquake data</dt><dd>SeismicPortal / EMSC</dd></div>
             <div><dt>Country lookup</dt><dd>OpenStreetMap Nominatim</dd></div>
             <div><dt>Map</dt><dd>Leaflet, OpenStreetMap, CARTO</dd></div>
           </dl>
-          <p class="data-note">This app shows reported earthquakes with location-based feature. It is not an earthquake early-warning system.</p>
+          <p class="data-note">This app shows reported earthquakes. It is not an earthquake early-warning system.</p>
         </section>
       </section>
     </main>
