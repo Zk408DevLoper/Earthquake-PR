@@ -21,17 +21,20 @@ const FOLLOW_RESUME_MS = 30 * 1000;      // resume following the user this long 
 const NEAREST_MAX_AGE_MS = NEAREST_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 const COUNTRY_CACHE_KEY = "eq_country_v1";
 const THEME_NAME_KEY = "eq_theme_name";
-const THEME_VARS_KEY = "eq_theme_vars";
+const THEME_VARS_KEY = "eq_theme_css_v2";
+const CLASSIC_BAR_COLOR = "#090b0c";
 
+// tintBackground: false = the original neutral dark look; true = background tinted in the theme color.
 const THEME_COLORS = [
-  { id: "cyan", name: "Cyan", hex: "#08b8d2" },
-  { id: "blue", name: "Blue", hex: "#4c8dff" },
-  { id: "green", name: "Green", hex: "#3ddc84" },
-  { id: "purple", name: "Purple", hex: "#a77bff" },
-  { id: "pink", name: "Pink", hex: "#ff5fa2" },
-  { id: "orange", name: "Orange", hex: "#ff9a3d" },
-  { id: "red", name: "Red", hex: "#ff5a5f" },
-  { id: "yellow", name: "Yellow", hex: "#e7c83d" }
+  { id: "classic", name: "Classic", hex: "#08b8d2", tintBackground: false },
+  { id: "cyan", name: "Cyan", hex: "#08b8d2", tintBackground: true },
+  { id: "blue", name: "Blue", hex: "#4c8dff", tintBackground: true },
+  { id: "green", name: "Green", hex: "#3ddc84", tintBackground: true },
+  { id: "purple", name: "Purple", hex: "#a77bff", tintBackground: true },
+  { id: "pink", name: "Pink", hex: "#ff5fa2", tintBackground: true },
+  { id: "orange", name: "Orange", hex: "#ff9a3d", tintBackground: true },
+  { id: "red", name: "Red", hex: "#ff5a5f", tintBackground: true },
+  { id: "yellow", name: "Yellow", hex: "#e7c83d", tintBackground: true }
 ];
 
 const DEFAULT_MAP_CENTER = [12.8797, 121.7740];
@@ -98,7 +101,7 @@ const VIEW_TITLES = {
   "about-view": "About"
 };
 
-/* ---------- Theme color ---------- */
+/* ---------- Theme ---------- */
 
 function hexToRgb(hex) {
   const value = hex.replace("#", "");
@@ -109,31 +112,144 @@ function hexToRgb(hex) {
   ];
 }
 
+function rgbToHex(rgb) {
+  return "#" + rgb.map(channel => channel.toString(16).padStart(2, "0")).join("");
+}
+
+function rgbToHue(rgb) {
+  const r = rgb[0] / 255;
+  const g = rgb[1] / 255;
+  const b = rgb[2] / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+  if (delta === 0) return 0;
+
+  let hue;
+  if (max === r) hue = ((g - b) / delta) % 6;
+  else if (max === g) hue = (b - r) / delta + 2;
+  else hue = (r - g) / delta + 4;
+
+  hue *= 60;
+  return hue < 0 ? hue + 360 : hue;
+}
+
+// hue in degrees, saturation and lightness from 0 to 1. Returns [r, g, b].
+function hslToRgb(hue, saturation, lightness) {
+  const h = ((hue % 360) + 360) % 360 / 60;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const x = chroma * (1 - Math.abs((h % 2) - 1));
+
+  let r = 0;
+  let g = 0;
+  let b = 0;
+  if (h < 1) { r = chroma; g = x; }
+  else if (h < 2) { r = x; g = chroma; }
+  else if (h < 3) { g = chroma; b = x; }
+  else if (h < 4) { g = x; b = chroma; }
+  else if (h < 5) { r = x; b = chroma; }
+  else { r = chroma; b = x; }
+
+  const offset = lightness - chroma / 2;
+  return [r + offset, g + offset, b + offset].map(value => Math.round(value * 255));
+}
+
 function mixWithWhite(rgb, amount) {
   const mix = channel => Math.round(channel + (255 - channel) * amount);
   return `rgb(${mix(rgb[0])}, ${mix(rgb[1])}, ${mix(rgb[2])})`;
 }
 
+// Builds the full set of dark background colors for a given hue.
+function buildPalette(hue) {
+  const saturation = 0.42;
+  const shade = lightness => hslToRgb(hue, saturation, lightness);
+  const css = rgb => `rgb(${rgb[0]}, ${rgb[1]}, ${rgb[2]})`;
+
+  const bg = shade(0.07);
+  const top = shade(0.05);
+  const strip = shade(0.085);
+  const surface = shade(0.115);
+  const raised = shade(0.15);
+  const soft = shade(0.175);
+  const mapBg = shade(0.095);
+  const mapCard = shade(0.105);
+  const mapBorder = shade(0.23);
+  const panelTop = shade(0.125);
+  const panelBottom = shade(0.095);
+  const popup = shade(0.11);
+  const toast = shade(0.17);
+
+  return {
+    vars: {
+      "--bg": css(bg),
+      "--bg-rgb": bg.join(", "),
+      "--bg-top": css(top),
+      "--top-rgb": top.join(", "),
+      "--bg-strip": css(strip),
+      "--strip-rgb": strip.join(", "),
+      "--surface": css(surface),
+      "--surface-raised": css(raised),
+      "--surface-soft": css(soft),
+      "--map-bg": css(mapBg),
+      "--map-card-bg": css(mapCard),
+      "--map-border": css(mapBorder),
+      "--panel-top": css(panelTop),
+      "--panel-bottom": css(panelBottom),
+      "--popup-bg": css(popup),
+      "--toast-bg": css(toast)
+    },
+    barHex: rgbToHex(top),
+    swatchColor: css(raised)
+  };
+}
+
+const PALETTE_VAR_NAMES = Object.keys(buildPalette(0).vars);
+
 function renderThemeSwatches() {
   if (!elements.themeSwatches) return;
-  elements.themeSwatches.innerHTML = THEME_COLORS.map(theme =>
-    `<button class="swatch" type="button" data-theme="${theme.id}" style="background:${theme.hex}" aria-label="${theme.name}" title="${theme.name}"></button>`
-  ).join("");
+
+  elements.themeSwatches.innerHTML = THEME_COLORS.map(theme => {
+    const backgroundColor = theme.tintBackground
+      ? buildPalette(rgbToHue(hexToRgb(theme.hex))).swatchColor
+      : "#222729";
+    return `<button class="swatch" type="button" data-theme="${theme.id}" style="background:linear-gradient(135deg, ${backgroundColor} 50%, ${theme.hex} 50%)" aria-label="${theme.name}" title="${theme.name}"></button>`;
+  }).join("");
+}
+
+// Tells the Android app which color to use behind the status bar and bottom bar.
+function notifyAndroidBarColor(hex) {
+  try {
+    if (window.AndroidBridge && typeof window.AndroidBridge.setSystemBarColor === "function") {
+      window.AndroidBridge.setSystemBarColor(hex);
+    }
+  } catch (error) {
+    // Not running inside the Android app, or the app is an older version.
+  }
 }
 
 function applyTheme(themeId, { save = true } = {}) {
   const theme = THEME_COLORS.find(item => item.id === themeId) || THEME_COLORS[0];
-  const rgb = hexToRgb(theme.hex);
+  const accentRgb = hexToRgb(theme.hex);
+
   const vars = {
-    accent: theme.hex,
-    rgb: rgb.join(", "),
-    light: mixWithWhite(rgb, 0.45)
+    "--accent": theme.hex,
+    "--accent-rgb": accentRgb.join(", "),
+    "--accent-light": mixWithWhite(accentRgb, 0.45)
   };
 
+  let barColor = CLASSIC_BAR_COLOR;
+  if (theme.tintBackground) {
+    const palette = buildPalette(rgbToHue(accentRgb));
+    Object.assign(vars, palette.vars);
+    barColor = palette.barHex;
+  }
+
   const rootStyle = document.documentElement.style;
-  rootStyle.setProperty("--accent", vars.accent);
-  rootStyle.setProperty("--accent-rgb", vars.rgb);
-  rootStyle.setProperty("--accent-light", vars.light);
+  Object.keys(vars).forEach(name => rootStyle.setProperty(name, vars[name]));
+  if (!theme.tintBackground) {
+    // Classic: remove the tinted colors so the original stylesheet colors apply.
+    PALETTE_VAR_NAMES.forEach(name => rootStyle.removeProperty(name));
+  }
 
   document.querySelectorAll(".swatch").forEach(button => {
     const active = button.dataset.theme === theme.id;
@@ -142,22 +258,24 @@ function applyTheme(themeId, { save = true } = {}) {
   });
   if (elements.themeCurrentName) elements.themeCurrentName.textContent = theme.name;
 
+  notifyAndroidBarColor(barColor);
+
   if (save) {
     try {
       window.localStorage.setItem(THEME_NAME_KEY, theme.id);
       window.localStorage.setItem(THEME_VARS_KEY, JSON.stringify(vars));
     } catch (error) {
-      // Saving is optional. The color still changes for this session.
+      // Saving is optional. The theme still changes for this session.
     }
   }
 }
 
 function loadSavedTheme() {
-  let savedId = "cyan";
+  let savedId = "classic";
   try {
-    savedId = window.localStorage.getItem(THEME_NAME_KEY) || "cyan";
+    savedId = window.localStorage.getItem(THEME_NAME_KEY) || "classic";
   } catch (error) {
-    savedId = "cyan";
+    savedId = "classic";
   }
   renderThemeSwatches();
   applyTheme(savedId, { save: false });
