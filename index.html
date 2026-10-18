@@ -8,8 +8,22 @@
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>Earthquake Monitor</title>
+  <script>
+    // Apply the saved theme color immediately, so there is no flash of the default color.
+    (function () {
+      try {
+        var saved = JSON.parse(window.localStorage.getItem("eq_theme_vars") || "null");
+        if (saved && saved.accent && saved.rgb && saved.light) {
+          var rootStyle = document.documentElement.style;
+          rootStyle.setProperty("--accent", saved.accent);
+          rootStyle.setProperty("--accent-rgb", saved.rgb);
+          rootStyle.setProperty("--accent-light", saved.light);
+        }
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=4">
+  <link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
   <div class="app-shell">
@@ -61,7 +75,7 @@
               <svg viewBox="0 0 24 24"><path d="M3 12h4l2.2-6 4.1 12 2.2-6H21"/></svg>
             </div>
             <div class="card-heading-copy">
-              <p class="section-kicker">CLOSEST REPORTED EVENT</p>
+              <p class="section-kicker" id="nearest-kicker">CLOSEST EVENT · LAST 2 DAYS</p>
               <h2 id="nearest-title">Nearest earthquake</h2>
             </div>
             <span id="magnitude-badge" class="magnitude-badge">M --</span>
@@ -84,9 +98,9 @@
 
       <section class="view" id="timeline-view" aria-label="Recent earthquakes">
         <div class="page-intro">
-          <p class="section-kicker">LATEST AVAILABLE DATA</p>
+          <p class="section-kicker">LATEST IN YOUR COUNTRY</p>
           <h2>Earthquake timeline</h2>
-          <p>Recent reported events returned by the earthquake data service. This list updates automatically.</p>
+          <p id="timeline-description">Waiting for your location to show earthquakes in your country.</p>
         </div>
         <div class="timeline-toolbar">
           <span id="timeline-count">0 events</span>
@@ -106,7 +120,7 @@
         </div>
         <button class="secondary-button full-width" id="home-map-button" type="button">Open earthquake map</button>
         <section class="home-latest">
-          <p class="section-kicker">NEAREST REPORTED EVENT</p>
+          <p class="section-kicker">NEAREST EVENT · LAST 2 DAYS</p>
           <h3 id="home-nearest-location">Location not available yet</h3>
           <div class="home-latest-meta"><span id="home-nearest-mag">Magnitude --</span><span id="home-nearest-distance">Distance --</span></div>
         </section>
@@ -116,17 +130,67 @@
         <div class="page-intro">
           <p class="section-kicker">PREFERENCES</p>
           <h2>Menu</h2>
-          <p>Data information. Location and earthquake data update automatically.</p>
+          <p>Settings and data information. Location and earthquake data update automatically.</p>
         </div>
 
         <!-- Only shown inside the Android app. Remove after testing. -->
         <button class="menu-row" id="test-notification-button" type="button" style="display:none">
-          <span class="menu-row-icon"></span>
+          <span class="menu-row-icon">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          </span>
           <span><strong>Test notification</strong><small>Goes to your home screen, then sends a simulated old earthquake alert</small></span>
           <span class="menu-chevron">›</span>
         </button>
 
+        <section class="settings-panel" aria-labelledby="settings-title">
+          <p class="section-kicker">SETTINGS</p>
+          <h3 id="settings-title">Theme color</h3>
+          <p class="settings-hint">Choose the accent color used across the app.</p>
+          <div id="theme-swatches" class="swatch-row" role="group" aria-label="Theme color"></div>
+          <p class="settings-hint">Current color: <strong id="theme-current-name">Cyan</strong></p>
+        </section>
+
         <div class="source-panel"><p class="section-kicker">DATA SOURCE</p><h3>SeismicPortal / EMSC data service</h3><p>Displayed events depend on the records returned by the service and may be delayed or incomplete.</p></div>
+      </section>
+
+      <section class="view" id="about-view" aria-label="About">
+        <div class="page-intro">
+          <p class="section-kicker">ABOUT</p>
+          <h2>About Earthquake Monitor</h2>
+          <p>Shows recent earthquakes in your country, finds the closest one to you, and sends an alert when a new earthquake is reported nearby.</p>
+        </div>
+
+        <section class="about-card">
+          <p class="section-kicker">THE TEAM</p>
+          <h3>Made by</h3>
+          <!-- Replace the names and roles below. Copy a whole <li> block to add more people. -->
+          <ul class="member-list">
+            <li class="member-card">
+              <span class="member-avatar">1</span>
+              <span class="member-info"><strong>Your name here</strong><small>Role / title</small></span>
+            </li>
+            <li class="member-card">
+              <span class="member-avatar">2</span>
+              <span class="member-info"><strong>Your name here</strong><small>Role / title</small></span>
+            </li>
+            <li class="member-card">
+              <span class="member-avatar">3</span>
+              <span class="member-info"><strong>Your name here</strong><small>Role / title</small></span>
+            </li>
+          </ul>
+        </section>
+
+        <section class="about-card">
+          <p class="section-kicker">APP INFO</p>
+          <h3>Details</h3>
+          <dl class="info-list">
+            <div><dt>Version</dt><dd>1.0</dd></div>
+            <div><dt>Earthquake data</dt><dd>SeismicPortal / EMSC</dd></div>
+            <div><dt>Country lookup</dt><dd>OpenStreetMap Nominatim</dd></div>
+            <div><dt>Map</dt><dd>Leaflet, OpenStreetMap, CARTO</dd></div>
+          </dl>
+          <p class="data-note">This app shows reported earthquakes. It is not an earthquake early-warning system.</p>
+        </section>
       </section>
     </main>
 
@@ -142,6 +206,9 @@
       </button>
       <button class="nav-item" type="button" data-view="menu-view" aria-label="Menu">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg><span>Menu</span>
+      </button>
+      <button class="nav-item" type="button" data-view="about-view" aria-label="About">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg><span>About</span>
       </button>
     </nav>
   </div>
