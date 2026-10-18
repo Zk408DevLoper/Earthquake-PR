@@ -1,35 +1,39 @@
 "use strict";
 
 const EARTHQUAKE_API_BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
-const EARTHQUAKE_SEARCH_RADIUS_KM = 100;
+const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 
-// Auto-update settings
-const AUTO_REFRESH_MS = 30 * 1000;     // reload earthquake data every 30 seconds
-const MOVE_THRESHOLD_KM = 0.03;        // ignore GPS jitter smaller than ~30 m
-const REFETCH_DISTANCE_KM = 5;         // re-query the catalogue after moving this far
-const FOLLOW_RESUME_MS = 30 * 1000;    // resume following the user this long after a manual map drag
+// ---------- Settings you can change ----------
+const NEAREST_MAX_AGE_DAYS = 2;          // "Nearest earthquake" only uses events from the last 2 days
+const TIMELINE_DAYS = 7;                 // timeline and map show the last 7 days for your country
+const MAX_COUNTRY_EVENTS = 300;          // most events requested for your country
+const MAX_GLOBAL_EVENTS = 100;           // only used before your location is known
+const FALLBACK_RADIUS_KM = 500;          // used if your country cannot be determined
+const COUNTRY_BBOX_PADDING_DEGREES = 0.5; // also include offshore events just outside the country's borders
+const COUNTRY_RECHECK_KM = 50;           // look up the country again after moving this far
+const COUNTRY_RETRY_MS = 60 * 1000;      // wait this long after a failed country lookup
 
-function buildEarthquakeApiUrl() {
-  const parameters = new URLSearchParams({
-    format: "json",
-    limit: "100",
-    // SeismicPortal uses "time" for newest-first ordering.
-    orderby: "time"
-  });
+const AUTO_REFRESH_MS = 30 * 1000;       // reload earthquake data every 30 seconds
+const MOVE_THRESHOLD_KM = 0.03;          // ignore GPS jitter smaller than ~30 m
+const REFETCH_DISTANCE_KM = 25;          // only used when the country is unknown
+const FOLLOW_RESUME_MS = 30 * 1000;      // resume following the user this long after a manual map drag
 
-  // Once location is available, retrieve events around the device instead of
-  // relying only on the newest global records, which may not include nearby events.
-  if (userLatitude !== null && userLongitude !== null) {
-    parameters.set("latitude", userLatitude.toFixed(6));
-    parameters.set("longitude", userLongitude.toFixed(6));
-    parameters.set(
-      "maxradius",
-      (EARTHQUAKE_SEARCH_RADIUS_KM / 111.195).toFixed(4)
-    );
-  }
+const NEAREST_MAX_AGE_MS = NEAREST_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+const COUNTRY_CACHE_KEY = "eq_country_v1";
+const THEME_NAME_KEY = "eq_theme_name";
+const THEME_VARS_KEY = "eq_theme_vars";
 
-  return `${EARTHQUAKE_API_BASE}?${parameters.toString()}`;
-}
+const THEME_COLORS = [
+  { id: "cyan", name: "Cyan", hex: "#08b8d2" },
+  { id: "blue", name: "Blue", hex: "#4c8dff" },
+  { id: "green", name: "Green", hex: "#3ddc84" },
+  { id: "purple", name: "Purple", hex: "#a77bff" },
+  { id: "pink", name: "Pink", hex: "#ff5fa2" },
+  { id: "orange", name: "Orange", hex: "#ff9a3d" },
+  { id: "red", name: "Red", hex: "#ff5a5f" },
+  { id: "yellow", name: "Yellow", hex: "#e7c83d" }
+];
+
 const DEFAULT_MAP_CENTER = [12.8797, 121.7740];
 const DEFAULT_MAP_ZOOM = 5;
 
@@ -39,6 +43,7 @@ let userMarker;
 let userLatitude = null;
 let userLongitude = null;
 let earthquakeEvents = [];
+let eventsScope = "global"; // "global" (no location yet), "country" or "radius"
 let nearestEvent = null;
 let toastTimeout;
 let activeFetchController = null;
@@ -47,6 +52,10 @@ let locationWatchId = null;
 let lastFetchLatitude = null;
 let lastFetchLongitude = null;
 let locationErrorShown = false;
+
+let userCountry = null; // { name, code, bbox: [south, north, west, east], lookupLatitude, lookupLongitude }
+let countryLookupInProgress = false;
+let lastCountryLookupFailure = 0;
 
 let followUser = true;
 let followResumeTimeout = null;
@@ -58,6 +67,8 @@ const elements = {
   lastUpdated: document.getElementById("last-updated"),
   eventCount: document.getElementById("event-count"),
   mapMessage: document.getElementById("map-message"),
+  nearestKicker: document.getElementById("nearest-kicker"),
+  nearestTitle: document.getElementById("nearest-title"),
   nearestLocation: document.getElementById("nearest-location"),
   nearestDistance: document.getElementById("nearest-distance"),
   nearestDepth: document.getElementById("nearest-depth"),
@@ -67,12 +78,15 @@ const elements = {
   mapCoordinates: document.getElementById("map-coordinates"),
   earthquakeList: document.getElementById("earthquake-list"),
   timelineCount: document.getElementById("timeline-count"),
+  timelineDescription: document.getElementById("timeline-description"),
   homeEventCount: document.getElementById("home-event-count"),
   homeLocationStatus: document.getElementById("home-location-status"),
   homeCoordinates: document.getElementById("home-coordinates"),
   homeNearestLocation: document.getElementById("home-nearest-location"),
   homeNearestMag: document.getElementById("home-nearest-mag"),
   homeNearestDistance: document.getElementById("home-nearest-distance"),
+  themeSwatches: document.getElementById("theme-swatches"),
+  themeCurrentName: document.getElementById("theme-current-name"),
   toast: document.getElementById("toast")
 };
 
@@ -80,8 +94,218 @@ const VIEW_TITLES = {
   "home-view": "Home",
   "timeline-view": "Earthquake Timeline",
   "map-view": "Earthquake Monitor",
-  "menu-view": "Menu"
+  "menu-view": "Menu",
+  "about-view": "About"
 };
+
+/* ---------- Theme color ---------- */
+
+function hexToRgb(hex) {
+  const value = hex.replace("#", "");
+  return [
+    parseInt(value.slice(0, 2), 16),
+    parseInt(value.slice(2, 4), 16),
+    parseInt(value.slice(4, 6), 16)
+  ];
+}
+
+function mixWithWhite(rgb, amount) {
+  const mix = channel => Math.round(channel + (255 - channel) * amount);
+  return `rgb(${mix(rgb[0])}, ${mix(rgb[1])}, ${mix(rgb[2])})`;
+}
+
+function renderThemeSwatches() {
+  if (!elements.themeSwatches) return;
+  elements.themeSwatches.innerHTML = THEME_COLORS.map(theme =>
+    `<button class="swatch" type="button" data-theme="${theme.id}" style="background:${theme.hex}" aria-label="${theme.name}" title="${theme.name}"></button>`
+  ).join("");
+}
+
+function applyTheme(themeId, { save = true } = {}) {
+  const theme = THEME_COLORS.find(item => item.id === themeId) || THEME_COLORS[0];
+  const rgb = hexToRgb(theme.hex);
+  const vars = {
+    accent: theme.hex,
+    rgb: rgb.join(", "),
+    light: mixWithWhite(rgb, 0.45)
+  };
+
+  const rootStyle = document.documentElement.style;
+  rootStyle.setProperty("--accent", vars.accent);
+  rootStyle.setProperty("--accent-rgb", vars.rgb);
+  rootStyle.setProperty("--accent-light", vars.light);
+
+  document.querySelectorAll(".swatch").forEach(button => {
+    const active = button.dataset.theme === theme.id;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", active ? "true" : "false");
+  });
+  if (elements.themeCurrentName) elements.themeCurrentName.textContent = theme.name;
+
+  if (save) {
+    try {
+      window.localStorage.setItem(THEME_NAME_KEY, theme.id);
+      window.localStorage.setItem(THEME_VARS_KEY, JSON.stringify(vars));
+    } catch (error) {
+      // Saving is optional. The color still changes for this session.
+    }
+  }
+}
+
+function loadSavedTheme() {
+  let savedId = "cyan";
+  try {
+    savedId = window.localStorage.getItem(THEME_NAME_KEY) || "cyan";
+  } catch (error) {
+    savedId = "cyan";
+  }
+  renderThemeSwatches();
+  applyTheme(savedId, { save: false });
+}
+
+/* ---------- Requests ---------- */
+
+function buildEarthquakeRequest() {
+  const hasLocation = userLatitude !== null && userLongitude !== null;
+  const days = hasLocation ? TIMELINE_DAYS : NEAREST_MAX_AGE_DAYS;
+
+  const parameters = new URLSearchParams({
+    format: "json",
+    orderby: "time", // newest first
+    limit: String(hasLocation ? MAX_COUNTRY_EVENTS : MAX_GLOBAL_EVENTS),
+    starttime: new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString().slice(0, 19)
+  });
+
+  let scope = "global";
+
+  if (hasLocation) {
+    if (userCountry && Array.isArray(userCountry.bbox)) {
+      const south = userCountry.bbox[0];
+      const north = userCountry.bbox[1];
+      const west = userCountry.bbox[2];
+      const east = userCountry.bbox[3];
+      const pad = COUNTRY_BBOX_PADDING_DEGREES;
+
+      parameters.set("minlatitude", Math.max(-90, south - pad).toFixed(4));
+      parameters.set("maxlatitude", Math.min(90, north + pad).toFixed(4));
+      parameters.set("minlongitude", Math.max(-180, west - pad).toFixed(4));
+      parameters.set("maxlongitude", Math.min(180, east + pad).toFixed(4));
+      scope = "country";
+    } else {
+      parameters.set("latitude", userLatitude.toFixed(6));
+      parameters.set("longitude", userLongitude.toFixed(6));
+      parameters.set("maxradius", (FALLBACK_RADIUS_KM / 111.195).toFixed(4));
+      scope = "radius";
+    }
+  }
+
+  return { url: `${EARTHQUAKE_API_BASE}?${parameters.toString()}`, scope };
+}
+
+/* ---------- Country lookup ---------- */
+
+function readCachedCountry() {
+  try {
+    const raw = window.localStorage.getItem(COUNTRY_CACHE_KEY);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (data && data.name
+      && Array.isArray(data.bbox) && data.bbox.length === 4
+      && Number.isFinite(data.lookupLatitude) && Number.isFinite(data.lookupLongitude)) {
+      return data;
+    }
+  } catch (error) {
+    // Ignore a damaged cache entry.
+  }
+  return null;
+}
+
+function saveCachedCountry(country) {
+  try {
+    window.localStorage.setItem(COUNTRY_CACHE_KEY, JSON.stringify(country));
+  } catch (error) {
+    // Saving is optional.
+  }
+}
+
+async function lookupCountry(latitude, longitude) {
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const parameters = new URLSearchParams({
+      format: "jsonv2",
+      zoom: "3",
+      addressdetails: "1",
+      "accept-language": "en",
+      lat: latitude.toFixed(5),
+      lon: longitude.toFixed(5)
+    });
+
+    const response = await fetch(`${NOMINATIM_REVERSE_URL}?${parameters.toString()}`, {
+      headers: { "Accept": "application/json" },
+      signal: controller.signal
+    });
+    if (!response.ok) throw new Error(`Country lookup returned HTTP ${response.status}`);
+
+    const data = await response.json();
+    const name = data && data.address && data.address.country;
+    const box = data && Array.isArray(data.boundingbox) ? data.boundingbox.map(Number) : null;
+    if (!name || !box || box.length !== 4 || box.some(value => !Number.isFinite(value))) return null;
+
+    return {
+      name: String(name),
+      code: String(data.address.country_code || "").toUpperCase(),
+      bbox: box, // [south, north, west, east]
+      lookupLatitude: latitude,
+      lookupLongitude: longitude
+    };
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+// Works out which country the user is in. It only repeats after moving far away
+// (or after a failure), so it is cheap to call on every GPS update.
+async function ensureCountry(latitude, longitude) {
+  if (countryLookupInProgress) return;
+
+  if (userCountry && calculateDistance(userCountry.lookupLatitude, userCountry.lookupLongitude, latitude, longitude) < COUNTRY_RECHECK_KM) {
+    return;
+  }
+  if (Date.now() - lastCountryLookupFailure < COUNTRY_RETRY_MS) return;
+
+  // Use the saved result when still near the place where it was looked up.
+  const cached = readCachedCountry();
+  if (cached && calculateDistance(cached.lookupLatitude, cached.lookupLongitude, latitude, longitude) < COUNTRY_RECHECK_KM) {
+    userCountry = cached;
+    renderTimeline();
+    loadEarthquakeData({ silent: true });
+    return;
+  }
+
+  countryLookupInProgress = true;
+  try {
+    const found = await lookupCountry(latitude, longitude);
+    if (found) {
+      userCountry = found;
+      saveCachedCountry(found);
+    } else {
+      lastCountryLookupFailure = Date.now();
+    }
+  } catch (error) {
+    console.error("Country lookup error:", error);
+    lastCountryLookupFailure = Date.now();
+  } finally {
+    countryLookupInProgress = false;
+  }
+
+  // Load data for the country (or for the fallback area if the lookup failed).
+  renderTimeline();
+  loadEarthquakeData({ silent: true });
+}
+
+/* ---------- Map ---------- */
 
 function initializeMap() {
   if (typeof L === "undefined") {
@@ -124,6 +348,8 @@ function followUserPosition() {
   earthquakeMap.panTo([userLatitude, userLongitude], { animate: true });
 }
 
+/* ---------- Helpers ---------- */
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, character => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -138,6 +364,23 @@ function formatDate(value) {
     year: "numeric", month: "short", day: "numeric",
     hour: "2-digit", minute: "2-digit"
   });
+}
+
+function formatAgo(value) {
+  if (value === null || value === undefined || value === "") return "";
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return "";
+  const minutes = Math.max(0, Math.round((Date.now() - time) / 60000));
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} h ago`;
+  return `${Math.floor(hours / 24)} d ago`;
+}
+
+function getEventTimeMs(event) {
+  if (!event || event.time === null || event.time === undefined || event.time === "") return NaN;
+  return new Date(event.time).getTime();
 }
 
 function toNumberOrNull(value) {
@@ -158,7 +401,11 @@ function eventFromFeature(feature, index) {
   const properties = feature.properties || {};
   const rawTime = properties.time || properties.lastupdate || properties.updated || null;
   const magnitude = toNumberOrNull(properties.mag ?? properties.magnitude);
-  const depth = coordinates.length > 2 ? toNumberOrNull(coordinates[2]) : toNumberOrNull(properties.depth);
+
+  // Depth is reported as a negative number in the coordinates, so always show it as positive.
+  const rawDepth = toNumberOrNull(properties.depth) ?? (coordinates.length > 2 ? toNumberOrNull(coordinates[2]) : null);
+  const depth = rawDepth === null ? null : Math.abs(rawDepth);
+
   const location = properties.flynn_region || properties.region || properties.place || properties.title || "Location not reported";
   const id = String(feature.id || properties.source_id || properties.unid || `event-${index}`);
 
@@ -182,7 +429,7 @@ async function loadEarthquakeData({ silent = false } = {}) {
   activeFetchController = new AbortController();
   const fetchController = activeFetchController;
 
-  // Remember where this query was centred so we know when to re-query.
+  const request = buildEarthquakeRequest();
   const requestLatitude = userLatitude;
   const requestLongitude = userLongitude;
 
@@ -193,7 +440,7 @@ async function loadEarthquakeData({ silent = false } = {}) {
   }
 
   try {
-    const response = await fetch(buildEarthquakeApiUrl(), {
+    const response = await fetch(request.url, {
       method: "GET",
       headers: { "Accept": "application/json" },
       cache: "no-store",
@@ -205,11 +452,13 @@ async function loadEarthquakeData({ silent = false } = {}) {
     if (!data || !Array.isArray(data.features)) throw new Error("The earthquake service returned an unexpected response.");
 
     earthquakeEvents = data.features.map(eventFromFeature).filter(Boolean);
+    eventsScope = request.scope;
     lastFetchLatitude = requestLatitude;
     lastFetchLongitude = requestLongitude;
 
     // Use the newest GPS position, which may have changed while fetching.
     if (userLatitude !== null && userLongitude !== null) updateEventDistances();
+    else nearestEvent = null;
 
     renderMapMarkers();
     renderTimeline();
@@ -290,7 +539,7 @@ function renderMapMarkers() {
   updateUserMarker();
 }
 
-// Moves the blue "you are here" dot without rebuilding the earthquake markers.
+// Moves the "you are here" dot without rebuilding the earthquake markers.
 function updateUserMarker() {
   if (!earthquakeMap || userLatitude === null || userLongitude === null) return;
 
@@ -305,16 +554,41 @@ function updateUserMarker() {
     .addTo(earthquakeMap);
 }
 
+// Calculates the distance to every event, then picks the nearest one that
+// happened within the last NEAREST_MAX_AGE_DAYS days.
 function updateEventDistances() {
   earthquakeEvents.forEach(event => {
     event.distance = calculateDistance(userLatitude, userLongitude, event.latitude, event.longitude);
   });
-  const candidates = earthquakeEvents.filter(event => Number.isFinite(event.distance));
-  candidates.sort((a, b) => a.distance - b.distance);
-  nearestEvent = candidates.length ? candidates[0] : null;
+
+  nearestEvent = null;
+  if (eventsScope === "global") return; // wait until the country (or area) data has loaded
+
+  const cutoff = Date.now() - NEAREST_MAX_AGE_MS;
+  let best = null;
+  earthquakeEvents.forEach(event => {
+    const time = getEventTimeMs(event);
+    if (!Number.isFinite(time) || time < cutoff) return;
+    if (!Number.isFinite(event.distance)) return;
+    if (best === null || event.distance < best.distance) best = event;
+  });
+  nearestEvent = best;
+}
+
+function setNearestHeading(isSelected) {
+  if (elements.nearestKicker) {
+    elements.nearestKicker.textContent = isSelected
+      ? "SELECTED EVENT"
+      : `CLOSEST EVENT · LAST ${NEAREST_MAX_AGE_DAYS} DAYS`;
+  }
+  if (elements.nearestTitle) {
+    elements.nearestTitle.textContent = isSelected ? "Selected earthquake" : "Nearest earthquake";
+  }
 }
 
 function renderNearestEarthquake() {
+  setNearestHeading(false);
+
   if (userLatitude === null || userLongitude === null) {
     elements.nearestLocation.textContent = "Waiting for your location to calculate the nearest reported earthquake.";
     elements.nearestDistance.textContent = "--";
@@ -333,53 +607,76 @@ function renderNearestEarthquake() {
   elements.homeCoordinates.textContent = `${userLatitude.toFixed(4)}, ${userLongitude.toFixed(4)}`;
 
   if (!nearestEvent) {
-    elements.nearestLocation.textContent = "No earthquake location is available in the retrieved records.";
+    const message = eventsScope === "global"
+      ? "Looking for earthquakes near you…"
+      : `No earthquake reported in the last ${NEAREST_MAX_AGE_DAYS} days.`;
+    elements.nearestLocation.textContent = message;
     elements.nearestDistance.textContent = "--";
     elements.nearestDepth.textContent = "--";
     elements.nearestMagnitude.textContent = "--";
     elements.magnitudeBadge.textContent = "M --";
-    elements.homeNearestLocation.textContent = "No event available";
+    elements.homeNearestLocation.textContent = message;
     elements.homeNearestMag.textContent = "Magnitude --";
     elements.homeNearestDistance.textContent = "Distance --";
     return;
   }
 
   const magnitude = nearestEvent.magnitude === null ? "--" : nearestEvent.magnitude.toFixed(1);
-  elements.nearestLocation.textContent = nearestEvent.location;
+  const ago = formatAgo(nearestEvent.time);
+  const locationText = ago ? `${nearestEvent.location} · ${ago}` : nearestEvent.location;
+
+  elements.nearestLocation.textContent = locationText;
   elements.nearestDistance.textContent = `${nearestEvent.distance.toFixed(1)} km`;
   elements.nearestDepth.textContent = nearestEvent.depth === null ? "--" : nearestEvent.depth.toLocaleString();
   elements.nearestMagnitude.textContent = magnitude;
   elements.magnitudeBadge.textContent = `M ${magnitude}`;
-  elements.homeNearestLocation.textContent = nearestEvent.location;
+  elements.homeNearestLocation.textContent = locationText;
   elements.homeNearestMag.textContent = `Magnitude ${magnitude}`;
   elements.homeNearestDistance.textContent = `Distance ${nearestEvent.distance.toFixed(1)} km`;
 }
 
+function updateTimelineHeading() {
+  if (!elements.timelineDescription) return;
+
+  if (userLatitude === null || userLongitude === null) {
+    elements.timelineDescription.textContent = "Waiting for your location to show earthquakes in your country.";
+  } else if (userCountry) {
+    elements.timelineDescription.textContent = `Latest earthquakes in ${userCountry.name} from the last ${TIMELINE_DAYS} days, newest first. Updates automatically.`;
+  } else {
+    elements.timelineDescription.textContent = `Latest earthquakes within ${FALLBACK_RADIUS_KM} km of you from the last ${TIMELINE_DAYS} days, newest first. Updates automatically.`;
+  }
+}
+
 function renderTimeline() {
-  elements.timelineCount.textContent = `${earthquakeEvents.length} event${earthquakeEvents.length === 1 ? "" : "s"}`;
-  if (!earthquakeEvents.length) {
-    elements.earthquakeList.innerHTML = '<div class="empty-state">No earthquake events are currently available.</div>';
+  updateTimelineHeading();
+
+  const hasLocation = userLatitude !== null && userLongitude !== null;
+  if (!hasLocation || eventsScope === "global") {
+    const message = hasLocation ? "Finding your country…" : "Waiting for your location…";
+    elements.timelineCount.textContent = "0 events";
+    elements.earthquakeList.innerHTML = `<div class="empty-state">${message}</div>`;
     return;
   }
 
-  const list = [...earthquakeEvents];
-  if (userLatitude !== null && userLongitude !== null) {
-    list.sort((a, b) => {
-      const distanceA = a.distance === null ? Infinity : a.distance;
-      const distanceB = b.distance === null ? Infinity : b.distance;
-      return distanceA - distanceB;
-    });
-  } else {
-    list.sort((a, b) => new Date(b.time || 0).getTime() - new Date(a.time || 0).getTime());
+  // Newest first.
+  const list = [...earthquakeEvents].sort((a, b) => (getEventTimeMs(b) || 0) - (getEventTimeMs(a) || 0));
+
+  elements.timelineCount.textContent = `${list.length} event${list.length === 1 ? "" : "s"}`;
+  if (!list.length) {
+    const area = userCountry ? userCountry.name : "your area";
+    elements.earthquakeList.innerHTML = `<div class="empty-state">No earthquakes reported in ${escapeHtml(area)} in the last ${TIMELINE_DAYS} days.</div>`;
+    return;
   }
 
   elements.earthquakeList.innerHTML = list.map(event => {
     const magnitude = event.magnitude === null ? "--" : event.magnitude.toFixed(1);
     const severity = event.magnitude >= 5 ? "severe" : event.magnitude >= 4 ? "strong" : "";
     const distance = event.distance === null ? "Distance unavailable" : `${event.distance.toFixed(1)} km away`;
+    const ago = formatAgo(event.time);
+    const when = ago ? `${formatDate(event.time)} · ${ago}` : formatDate(event.time);
     return `<button class="earthquake-item" type="button" data-event-id="${escapeHtml(event.id)}">
       <span class="event-magnitude ${severity}">${magnitude}</span>
-      <span class="event-content"><strong>${escapeHtml(event.location)}</strong><span>${escapeHtml(formatDate(event.time))}</span><span>${escapeHtml(distance)} · Depth ${event.depth === null ? "unknown" : `${event.depth} km`}</span></span>
+      <span class="event-content"><strong>${escapeHtml(event.location)}</strong><span>${escapeHtml(when)}</span><span>${escapeHtml(distance)} · Depth ${event.depth === null ? "unknown" : `${event.depth} km`}</span></span>
       <span class="event-chevron">›</span>
     </button>`;
   }).join("");
@@ -405,7 +702,11 @@ function selectEarthquake(eventId) {
     });
     if (layer) layer.openPopup();
   }
-  elements.nearestLocation.textContent = event.location;
+
+  // Show the chosen event in the card until the next refresh.
+  setNearestHeading(true);
+  const ago = formatAgo(event.time);
+  elements.nearestLocation.textContent = ago ? `${event.location} · ${ago}` : event.location;
   elements.nearestDistance.textContent = event.distance === null ? "--" : `${event.distance.toFixed(1)} km`;
   elements.nearestDepth.textContent = event.depth === null ? "--" : event.depth.toLocaleString();
   elements.nearestMagnitude.textContent = event.magnitude === null ? "--" : event.magnitude.toFixed(1);
@@ -467,13 +768,18 @@ function handlePositionUpdate(position) {
     followUserPosition();
   }
 
-  // Re-query the catalogue around the new location on the first fix and
-  // whenever the user has moved far from the last query centre.
-  const needsRefetch = isFirstFix
-    || lastFetchLatitude === null
-    || lastFetchLongitude === null
-    || calculateDistance(lastFetchLatitude, lastFetchLongitude, latitude, longitude) >= REFETCH_DISTANCE_KM;
-  if (needsRefetch) loadEarthquakeData({ silent: true });
+  // Find out which country the user is in. This loads the country's earthquakes
+  // when it finishes, and only repeats after moving far away.
+  ensureCountry(latitude, longitude);
+
+  // If the country could not be determined, the data covers a circle around the
+  // user instead, so refresh it after moving a long way.
+  if (!userCountry && lastCountryLookupFailure > 0) {
+    const movedFar = lastFetchLatitude === null
+      || lastFetchLongitude === null
+      || calculateDistance(lastFetchLatitude, lastFetchLongitude, latitude, longitude) >= REFETCH_DISTANCE_KM;
+    if (movedFar) loadEarthquakeData({ silent: true });
+  }
 }
 
 function handleLocationError(error) {
@@ -556,36 +862,34 @@ document.addEventListener("click", event => {
     return;
   }
 
+  if (button.classList.contains("swatch")) {
+    applyTheme(button.dataset.theme);
+    return;
+  }
+
   if (button.dataset.eventId) {
     selectEarthquake(button.dataset.eventId);
     return;
   }
 
-  if (button.id === "test-button"){
-    if (
-        window.AndroidBridge &&
-        typeof window.AndroidBridge.goHomeAndTest === "function"
-    ) {
-        window.AndroidBridge.goHomeAndTest();
-    } else {
-        showToast("Notification testing is only available in the Android app.");
-    }
-  }
-  
   if (button.id === "home-map-button") {
     switchView("map-view");
   }
 });
 
+loadSavedTheme();
 initializeMap();
+renderTimeline();
 loadEarthquakeData();
 startLocationWatch();
 
 // Automatic refresh: runs while the app is on screen. It also restarts the
-// GPS watch if it was stopped (for example after permission was granted late).
+// GPS watch if it was stopped (for example after permission was granted late)
+// and retries the country lookup if it failed earlier.
 window.setInterval(() => {
   if (document.hidden) return;
   startLocationWatch();
+  if (userLatitude !== null && userLongitude !== null) ensureCountry(userLatitude, userLongitude);
   loadEarthquakeData({ silent: true });
 }, AUTO_REFRESH_MS);
 
