@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=6">
+  <link rel="stylesheet" href="style.css?v=7">
 </head>
 <body>
   <div class="app-shell">
@@ -71,6 +71,8 @@
           <div id="map-message" class="map-message" hidden>Loading earthquake data…</div>
         </div>
 
+        <div id="danger-banner" class="danger-banner" hidden></div>
+
         <section class="nearest-card" aria-labelledby="nearest-title">
           <div class="card-heading">
             <div class="card-heading-icon" aria-hidden="true">
@@ -88,13 +90,14 @@
             <div class="stat-item"><span class="stat-label">Depth</span><strong id="nearest-depth">--</strong><span class="stat-unit">kilometers</span></div>
             <div class="stat-item"><span class="stat-label">Magnitude</span><strong id="nearest-magnitude">--</strong><span class="stat-unit">reported</span></div>
           </div>
+          <p id="nearest-intensity" class="intensity-note"></p>
           <div class="location-row">
             <div class="location-row-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
             </div>
             <div class="location-coordinates"><span>Your coordinates (live)</span><strong id="coordinates">Waiting for GPS…</strong></div>
           </div>
-          <p class="data-note">Earthquake information reflects the latest data returned by the selected data service. It is not an earthquake early-warning guarantee.</p>
+          <p class="data-note">Earthquake information reflects the latest data returned by the selected data service. It is not an earthquake early-warning guarantee. Estimated intensity uses an empirical formula and is not a measurement.</p>
         </section>
       </section>
 
