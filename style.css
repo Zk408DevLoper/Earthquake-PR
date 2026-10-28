@@ -225,3 +225,10 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Estimated intensity / strong-shaking banner */
+.danger-banner{display:flex;flex-direction:column;gap:4px;margin:0 0 12px;padding:12px 14px;border-radius:14px;
+  background:rgba(237,41,41,.14);border:1px solid rgba(237,41,41,.55);color:#ffd9d9;font-size:.9rem;line-height:1.35}
+.danger-banner[hidden]{display:none}
+.danger-banner strong{color:#ff7b7b}
+.intensity-note{margin:10px 0 0;font-size:.85rem;opacity:.85}
