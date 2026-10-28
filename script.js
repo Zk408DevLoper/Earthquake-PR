@@ -4,7 +4,7 @@ const EARTHQUAKE_API_BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
 const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 
 // ---------- Settings you can change ----------
-const NEAREST_MAX_AGE_DAYS = 2;          // "Nearest earthquake" only uses events from the last 2 days
+const NEAREST_MAX_AGE_DAYS = 3;          // day
 const TIMELINE_DAYS = 7;                 // timeline and map show the last 7 days for your country
 const MAX_COUNTRY_EVENTS = 300;          // most events requested for your country
 const MAX_GLOBAL_EVENTS = 100;           // only used before your location is known
@@ -17,6 +17,11 @@ const AUTO_REFRESH_MS = 30 * 1000;       // reload earthquake data every 30 seco
 const MOVE_THRESHOLD_KM = 0.03;          // ignore GPS jitter smaller than ~30 m
 const REFETCH_DISTANCE_KM = 25;          // only used when the country is unknown
 const FOLLOW_RESUME_MS = 30 * 1000;      // resume following the user this long after a manual map drag
+
+// ---------- Estimated shaking intensity ----------
+const DANGER_INTENSITY = 6;              // estimated intensity treated as "strong shaking"
+const DEFAULT_DEPTH_KM = 10;             // used when an event has no depth (paper's assumption)
+const EARTH_RADIUS_KM = 6371;
 
 const NEAREST_MAX_AGE_MS = NEAREST_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
 const COUNTRY_CACHE_KEY = "eq_country_v1";
@@ -42,6 +47,7 @@ const DEFAULT_MAP_ZOOM = 5;
 
 let earthquakeMap;
 let earthquakeLayer;
+let zoneLayer;
 let userMarker;
 let userLatitude = null;
 let userLongitude = null;
@@ -77,6 +83,8 @@ const elements = {
   nearestDepth: document.getElementById("nearest-depth"),
   nearestMagnitude: document.getElementById("nearest-magnitude"),
   magnitudeBadge: document.getElementById("magnitude-badge"),
+  nearestIntensity: document.getElementById("nearest-intensity"),
+  dangerBanner: document.getElementById("danger-banner"),
   coordinates: document.getElementById("coordinates"),
   mapCoordinates: document.getElementById("map-coordinates"),
   earthquakeList: document.getElementById("earthquake-list"),
@@ -447,6 +455,7 @@ function initializeMap() {
   }).addTo(earthquakeMap);
 
   L.control.zoom({ position: "bottomright" }).addTo(earthquakeMap);
+  zoneLayer = L.layerGroup().addTo(earthquakeMap);
   earthquakeLayer = L.layerGroup().addTo(earthquakeMap);
 
   // When the user drags the map to look around, stop following their position
@@ -536,6 +545,7 @@ function eventFromFeature(feature, index) {
     location: String(location),
     time: rawTime,
     distance: null,
+    intensity: null,
     feature
   };
 }
@@ -636,8 +646,27 @@ function createQuakeIcon(event, isNearest) {
 function renderMapMarkers() {
   if (!earthquakeMap || !earthquakeLayer) return;
   earthquakeLayer.clearLayers();
+  if (zoneLayer) zoneLayer.clearLayers();
+
+  const zoneCutoff = Date.now() - NEAREST_MAX_AGE_MS;
 
   earthquakeEvents.forEach(event => {
+    // Red circle = area where the estimated intensity is at least DANGER_INTENSITY.
+    const eventTime = getEventTimeMs(event);
+    if (zoneLayer && Number.isFinite(eventTime) && eventTime >= zoneCutoff) {
+      const zoneKm = intensityRadiusKm(DANGER_INTENSITY, event.magnitude, event.depth);
+      if (zoneKm > 0) {
+        L.circle([event.latitude, event.longitude], {
+          radius: zoneKm * 1000,
+          color: "#ed2929",
+          weight: 1,
+          fillColor: "#ed2929",
+          fillOpacity: 0.12,
+          interactive: false
+        }).addTo(zoneLayer);
+      }
+    }
+
     const isNearest = Boolean(nearestEvent && event.id === nearestEvent.id);
     const marker = L.marker([event.latitude, event.longitude], {
       icon: createQuakeIcon(event, isNearest),
@@ -648,12 +677,14 @@ function renderMapMarkers() {
       <span class="popup-title">${escapeHtml(event.location)}</span>
       <span class="popup-mag">M ${event.magnitude === null ? "--" : event.magnitude.toFixed(1)}</span><br>
       <span>Depth: ${event.depth === null ? "Unknown" : `${event.depth} km`}</span><br>
+      <span>${escapeHtml(formatIntensityText(event))}</span><br>
       <span>${escapeHtml(formatDate(event.time))}</span><br>
       <button class="popup-select" type="button" onclick="selectEarthquake('${escapeHtml(event.id).replace(/'/g, "\\'")}')">View event details</button>
     `);
     marker.addTo(earthquakeLayer);
   });
 
+  updateDangerBanner();
   updateUserMarker();
 }
 
@@ -677,6 +708,7 @@ function updateUserMarker() {
 function updateEventDistances() {
   earthquakeEvents.forEach(event => {
     event.distance = calculateDistance(userLatitude, userLongitude, event.latitude, event.longitude);
+    event.intensity = expectedIntensity(event.distance, event.depth, event.magnitude);
   });
 
   nearestEvent = null;
@@ -706,6 +738,8 @@ function setNearestHeading(isSelected) {
 
 function renderNearestEarthquake() {
   setNearestHeading(false);
+  updateDangerBanner();
+  if (elements.nearestIntensity) elements.nearestIntensity.textContent = "";
 
   if (userLatitude === null || userLongitude === null) {
     elements.nearestLocation.textContent = "Waiting for your location to calculate the nearest reported earthquake.";
@@ -751,6 +785,7 @@ function renderNearestEarthquake() {
   elements.homeNearestLocation.textContent = locationText;
   elements.homeNearestMag.textContent = `Magnitude ${magnitude}`;
   elements.homeNearestDistance.textContent = `Distance ${nearestEvent.distance.toFixed(1)} km`;
+  if (elements.nearestIntensity) elements.nearestIntensity.textContent = formatIntensityText(nearestEvent);
 }
 
 function updateTimelineHeading() {
@@ -794,7 +829,7 @@ function renderTimeline() {
     const when = ago ? `${formatDate(event.time)} · ${ago}` : formatDate(event.time);
     return `<button class="earthquake-item" type="button" data-event-id="${escapeHtml(event.id)}">
       <span class="event-magnitude ${severity}">${magnitude}</span>
-      <span class="event-content"><strong>${escapeHtml(event.location)}</strong><span>${escapeHtml(when)}</span><span>${escapeHtml(distance)} · Depth ${event.depth === null ? "unknown" : `${event.depth} km`}</span></span>
+      <span class="event-content"><strong>${escapeHtml(event.location)}</strong><span>${escapeHtml(when)}</span><span>${escapeHtml(distance)} · Depth ${event.depth === null ? "unknown" : `${event.depth} km`}</span><span>${escapeHtml(formatIntensityText(event))}</span></span>
       <span class="event-chevron">›</span>
     </button>`;
   }).join("");
@@ -829,6 +864,78 @@ function selectEarthquake(eventId) {
   elements.nearestDepth.textContent = event.depth === null ? "--" : event.depth.toLocaleString();
   elements.nearestMagnitude.textContent = event.magnitude === null ? "--" : event.magnitude.toFixed(1);
   elements.magnitudeBadge.textContent = `M ${event.magnitude === null ? "--" : event.magnitude.toFixed(1)}`;
+  if (elements.nearestIntensity) elements.nearestIntensity.textContent = formatIntensityText(event);
+}
+
+/* ---------- Estimated shaking intensity (EQN isotropic IPE) ---------- */
+
+function effectiveDepth(depthKm) {
+  return depthKm !== null && depthKm >= 1 ? depthKm : DEFAULT_DEPTH_KM;
+}
+
+// I = -2.15*log10(r) + 1.03*M + 2.31, where r is the hypocentral distance in km.
+function expectedIntensity(distanceKm, depthKm, magnitude) {
+  if (!Number.isFinite(distanceKm) || !Number.isFinite(magnitude)) return null;
+  const depth = effectiveDepth(depthKm);
+  const r = Math.max(Math.sqrt(distanceKm * distanceKm + depth * depth), 1);
+  const intensity = -2.15 * Math.log10(r) + 1.03 * magnitude + 2.31;
+  return Math.max(0, Math.min(12, intensity));
+}
+
+// Surface radius (km) inside which the estimated intensity is at least the given value.
+function intensityRadiusKm(intensity, magnitude, depthKm) {
+  if (!Number.isFinite(magnitude)) return 0;
+  const depth = effectiveDepth(depthKm);
+  const r = Math.pow(10, (2.31 - intensity + 1.03 * magnitude) / 2.15);
+  if (r <= depth) return 0;
+  const R = EARTH_RADIUS_KM;
+  const ratio = (r * r - depth * depth) / (4 * R * (R - depth));
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(ratio)));
+}
+
+function describeIntensity(intensity) {
+  if (intensity === null) return "Not available";
+  if (intensity >= 7) return "Likely felt very strongly. Damage possible";
+  if (intensity >= DANGER_INTENSITY) return "Likely felt strongly. Slight damage possible";
+  if (intensity >= 4) return "Likely felt by most people";
+  if (intensity >= 2) return "Likely felt weakly";
+  return "Probably not felt";
+}
+
+function formatIntensityText(event) {
+  if (!event || event.intensity === null) return "Estimated intensity unavailable";
+  return `Est. intensity here: ${event.intensity.toFixed(1)} · ${describeIntensity(event.intensity)}`;
+}
+
+// Shows a banner if a recent event probably shook the user's location strongly.
+function updateDangerBanner() {
+  const banner = elements.dangerBanner;
+  if (!banner) return;
+
+  let worst = null;
+  if (userLatitude !== null && userLongitude !== null && eventsScope !== "global") {
+    const cutoff = Date.now() - NEAREST_MAX_AGE_MS;
+    earthquakeEvents.forEach(event => {
+      const time = getEventTimeMs(event);
+      if (!Number.isFinite(time) || time < cutoff || event.intensity === null) return;
+      if (event.intensity >= DANGER_INTENSITY && (worst === null || event.intensity > worst.intensity)) {
+        worst = event;
+      }
+    });
+  }
+
+  if (!worst) {
+    banner.hidden = true;
+    banner.innerHTML = "";
+    return;
+  }
+
+  const ago = formatAgo(worst.time);
+  banner.hidden = false;
+  banner.innerHTML = `<strong>You are inside a strong-shaking zone</strong>
+    <span>M${worst.magnitude.toFixed(1)} · ${escapeHtml(worst.location)}${ago ? " · " + escapeHtml(ago) : ""}.
+    Estimated intensity at your location: ${worst.intensity.toFixed(1)}.
+    Aftershocks are possible. Stay clear of damaged structures.</span>`;
 }
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
