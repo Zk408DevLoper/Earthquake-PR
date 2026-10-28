@@ -4,7 +4,7 @@ const EARTHQUAKE_API_BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
 const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 
 // ---------- Settings you can change ----------
-const NEAREST_MAX_AGE_DAYS = 3;          // day
+const NEAREST_MAX_AGE_DAYS = 2;          // "Nearest earthquake" only uses events from the last 2 days
 const TIMELINE_DAYS = 7;                 // timeline and map show the last 7 days for your country
 const MAX_COUNTRY_EVENTS = 300;          // most events requested for your country
 const MAX_GLOBAL_EVENTS = 100;           // only used before your location is known
@@ -12,6 +12,8 @@ const FALLBACK_RADIUS_KM = 500;          // used if your country cannot be deter
 const COUNTRY_BBOX_PADDING_DEGREES = 0.5; // also include offshore events just outside the country's borders
 const COUNTRY_RECHECK_KM = 50;           // look up the country again after moving this far
 const COUNTRY_RETRY_MS = 60 * 1000;      // wait this long after a failed country lookup
+const COUNTRY_OFFSHORE_BUFFER_KM = 100;  // timeline also keeps offshore events this close to the country's coast
+const MAX_SHAPE_POINTS = 6000;           // limit for the saved country outline
 
 const AUTO_REFRESH_MS = 30 * 1000;       // reload earthquake data every 30 seconds
 const MOVE_THRESHOLD_KM = 0.03;          // ignore GPS jitter smaller than ~30 m
@@ -24,7 +26,7 @@ const DEFAULT_DEPTH_KM = 10;             // used when an event has no depth (pap
 const EARTH_RADIUS_KM = 6371;
 
 const NEAREST_MAX_AGE_MS = NEAREST_MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
-const COUNTRY_CACHE_KEY = "eq_country_v1";
+const COUNTRY_CACHE_KEY = "eq_country_v2";
 const THEME_NAME_KEY = "eq_theme_name";
 const THEME_VARS_KEY = "eq_theme_css_v2";
 const CLASSIC_BAR_COLOR = "#090b0c";
@@ -363,6 +365,8 @@ async function lookupCountry(latitude, longitude) {
       format: "jsonv2",
       zoom: "3",
       addressdetails: "1",
+      polygon_geojson: "1",
+      polygon_threshold: "0.05",
       "accept-language": "en",
       lat: latitude.toFixed(5),
       lon: longitude.toFixed(5)
@@ -383,6 +387,7 @@ async function lookupCountry(latitude, longitude) {
       name: String(name),
       code: String(data.address.country_code || "").toUpperCase(),
       bbox: box, // [south, north, west, east]
+      shape: buildCountryShape(data.geojson), // country outline, or null
       lookupLatitude: latitude,
       lookupLongitude: longitude
     };
@@ -429,6 +434,131 @@ async function ensureCountry(latitude, longitude) {
   // Load data for the country (or for the fallback area if the lookup failed).
   renderTimeline();
   loadEarthquakeData({ silent: true });
+}
+
+/* ---------- Country outline filter (timeline) ---------- */
+
+// Turns the GeoJSON outline from the country lookup into a list of polygons:
+// shape = [ polygon, ... ], polygon = [ ring, ... ], ring = [ [lon, lat], ... ].
+// The first ring of a polygon is its outer edge; any others are holes.
+function buildCountryShape(geojson) {
+  if (!geojson || !Array.isArray(geojson.coordinates)) return null;
+
+  let polygons = null;
+  if (geojson.type === "Polygon") polygons = [geojson.coordinates];
+  else if (geojson.type === "MultiPolygon") polygons = geojson.coordinates;
+  if (!polygons) return null;
+
+  // Keep the saved outline small by dropping vertices on very detailed borders.
+  let total = 0;
+  polygons.forEach(polygon => polygon.forEach(ring => { total += ring.length; }));
+  const step = Math.max(1, Math.ceil(total / MAX_SHAPE_POINTS));
+
+  const result = [];
+  polygons.forEach(polygon => {
+    const rings = [];
+    polygon.forEach(ring => {
+      const kept = [];
+      for (let i = 0; i < ring.length; i += step) {
+        kept.push([Number(ring[i][0]), Number(ring[i][1])]);
+      }
+      const lastPoint = ring[ring.length - 1];
+      kept.push([Number(lastPoint[0]), Number(lastPoint[1])]);
+      if (kept.length >= 4) rings.push(kept);
+    });
+    if (rings.length) result.push(rings);
+  });
+  return result.length ? result : null;
+}
+
+function pointInRing(lon, lat, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i][0];
+    const yi = ring[i][1];
+    const xj = ring[j][0];
+    const yj = ring[j][1];
+    if ((yi > lat) !== (yj > lat) && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+function pointInShape(lon, lat, shape) {
+  return shape.some(polygon => {
+    if (!pointInRing(lon, lat, polygon[0])) return false;
+    for (let i = 1; i < polygon.length; i++) {
+      if (pointInRing(lon, lat, polygon[i])) return false; // inside a hole
+    }
+    return true;
+  });
+}
+
+// Shortest distance (km) from a point to the outline. Stops early once the
+// distance is within limitKm, because only "close enough or not" matters.
+function distanceToShapeKm(lon, lat, shape, limitKm) {
+  const kmPerDegree = 111.195;
+  const cosLat = Math.cos(degreesToRadians(lat));
+  let best = Infinity;
+
+  for (const polygon of shape) {
+    for (const ring of polygon) {
+      for (let i = 0; i < ring.length - 1; i++) {
+        const ax = (ring[i][0] - lon) * cosLat * kmPerDegree;
+        const ay = (ring[i][1] - lat) * kmPerDegree;
+        const bx = (ring[i + 1][0] - lon) * cosLat * kmPerDegree;
+        const by = (ring[i + 1][1] - lat) * kmPerDegree;
+        const dx = bx - ax;
+        const dy = by - ay;
+        const lengthSquared = dx * dx + dy * dy;
+        let t = lengthSquared === 0 ? 0 : -(ax * dx + ay * dy) / lengthSquared;
+        t = Math.max(0, Math.min(1, t));
+        const distance = Math.hypot(ax + t * dx, ay + t * dy);
+        if (distance < best) {
+          best = distance;
+          if (best <= limitKm) return best;
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function normalizeCountryName(value) {
+  return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z]/g, "");
+}
+
+function sameCountryName(first, second) {
+  const a = normalizeCountryName(first);
+  const b = normalizeCountryName(second);
+  return Boolean(a && b && (a.includes(b) || b.includes(a)));
+}
+
+// Region names often look like "MINDANAO, PHILIPPINES". Returns the part after the last comma.
+function regionCountrySuffix(location) {
+  const match = String(location || "").match(/,\s*([^,]+)$/);
+  return match ? match[1].trim() : "";
+}
+
+function isEventInCountry(event, country) {
+  // Inside the country's outline: always keep.
+  if (pointInShape(event.longitude, event.latitude, country.shape)) return true;
+
+  // Outside the outline (for example at sea): keep it only if its region name
+  // does not name a different country and it is close to the coast.
+  const suffix = regionCountrySuffix(event.location);
+  if (suffix && !sameCountryName(suffix, country.name)) return false;
+  return distanceToShapeKm(event.longitude, event.latitude, country.shape, COUNTRY_OFFSHORE_BUFFER_KM) <= COUNTRY_OFFSHORE_BUFFER_KM;
+}
+
+// Marks every loaded event as inside or outside the user's country.
+// Without a country outline, nothing is filtered out.
+function classifyEventsByCountry() {
+  const filterActive = eventsScope === "country" && userCountry && Array.isArray(userCountry.shape);
+  earthquakeEvents.forEach(event => {
+    event.inCountry = filterActive ? isEventInCountry(event, userCountry) : true;
+  });
 }
 
 /* ---------- Map ---------- */
@@ -546,6 +676,7 @@ function eventFromFeature(feature, index) {
     time: rawTime,
     distance: null,
     intensity: null,
+    inCountry: true,
     feature
   };
 }
@@ -581,6 +712,7 @@ async function loadEarthquakeData({ silent = false } = {}) {
 
     earthquakeEvents = data.features.map(eventFromFeature).filter(Boolean);
     eventsScope = request.scope;
+    classifyEventsByCountry();
     lastFetchLatitude = requestLatitude;
     lastFetchLongitude = requestLongitude;
 
@@ -812,7 +944,7 @@ function renderTimeline() {
   }
 
   // Newest first.
-  const list = [...earthquakeEvents].sort((a, b) => (getEventTimeMs(b) || 0) - (getEventTimeMs(a) || 0));
+  const list = earthquakeEvents.filter(event => event.inCountry).sort((a, b) => (getEventTimeMs(b) || 0) - (getEventTimeMs(a) || 0));
 
   elements.timelineCount.textContent = `${list.length} event${list.length === 1 ? "" : "s"}`;
   if (!list.length) {
