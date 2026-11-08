@@ -113,7 +113,13 @@
         <div id="earthquake-list" class="earthquake-list"><div class="empty-state">Loading earthquake events…</div></div>
       </section>
 
-      <section class="view" id="home-view" aria-label="Home summary">
+      <section class="view" id="home-view" aria-label="Home summary"><section class="info-panel" aria-labelledby="frequency-title">
+<h3 id="frequency-title">Earthquake frequency nearby</h3>
+<p id="frequency-counts" role="status"></p>
+<p id="frequency-status">Allow location access to see reports within 100 km.</p>
+<button id="frequency-refresh" type="button" class="text-button">Refresh</button>
+<p class="data-note">Source: EMSC / SeismicPortal earthquake catalogue.</p>
+</section>
         <div class="page-intro">
           <p class="section-kicker">OVERVIEW</p>
           <h2>Your earthquake dashboard</h2>
@@ -131,7 +137,15 @@
         </section>
       </section>
 
-      <section class="view" id="menu-view" aria-label="Application menu">
+      <section class="view" id="menu-view" aria-label="Application menu"><section class="settings-panel" aria-labelledby="emergency-title">
+<h3 id="emergency-title">Emergency contacts</h3>
+<p class="settings-hint">Saved on this device. Tap a contact to open the dialer. Add the emergency number verified for your area.</p>
+<div id="emergency-contact-list"></div>
+<form id="emergency-contact-form">
+<label for="contact-name">Contact name</label><input id="contact-name" maxlength="80" required autocomplete="name">
+<label for="contact-phone">Phone number</label><input id="contact-phone" type="tel" maxlength="25" required autocomplete="tel">
+<button class="primary-button" type="submit">Add contact</button>
+</form></section>
         <div class="page-intro">
           <p class="section-kicker">PREFERENCES</p>
           <h2>Menu</h2>
