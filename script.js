@@ -31,7 +31,9 @@ const REFETCH_DISTANCE_KM = 25;          // only used when the country is unknow
 const FOLLOW_RESUME_MS = 30 * 1000;      // resume following the user this long after a manual map drag
 
 // ---------- Estimated shaking intensity ----------
-const DANGER_INTENSITY = 6;              // estimated intensity treated as "strong shaking"
+const MILD_INTENSITY = 2;
+const MODERATE_INTENSITY = 4;
+const DANGER_INTENSITY = 5;              // paper’s intense-shaking boundary (Methods)
 const DEFAULT_DEPTH_KM = 10;             // used when an event has no depth (paper's assumption)
 const EARTH_RADIUS_KM = 6371;
 
@@ -1092,10 +1094,13 @@ function showSelectedEarthquakeOnMap() {
 
 /* ---------- Estimated shaking intensity (EQN isotropic IPE) ---------- */
 
+// Research configuration: the paper preliminarily assumes z = 10 km.
+// Preserve the catalogue depth for display, but use 10 km for all IPE estimates.
 function effectiveDepth(depthKm) {
-  return depthKm !== null && depthKm >= 1 ? depthKm : DEFAULT_DEPTH_KM;
+  return DEFAULT_DEPTH_KM;
 }
 
+// Source: Finazzi et al. (2024), Methods, doi:10.1038/s41598-024-55279-z.
 // I = -2.15*log10(r) + 1.03*M + 2.31, where r is the hypocentral distance in km.
 function expectedIntensity(distanceKm, depthKm, magnitude) {
   if (!Number.isFinite(distanceKm) || !Number.isFinite(magnitude)) return null;
@@ -1117,12 +1122,11 @@ function intensityRadiusKm(intensity, magnitude, depthKm) {
 }
 
 function describeIntensity(intensity) {
-  if (intensity === null) return "Not available";
-  if (intensity >= 7) return "Likely felt very strongly. Damage possible";
-  if (intensity >= DANGER_INTENSITY) return "Likely felt strongly. Slight damage possible";
-  if (intensity >= 4) return "Likely felt by most people";
-  if (intensity >= 2) return "Likely felt weakly";
-  return "Probably not felt";
+  if (!Number.isFinite(intensity)) return "Not available";
+  if (intensity >= DANGER_INTENSITY) return "Intense shaking estimate";
+  if (intensity >= MODERATE_INTENSITY) return "Moderate shaking estimate";
+  if (intensity >= MILD_INTENSITY) return "Mild shaking estimate";
+  return "Below the mild-shaking threshold";
 }
 
 function formatIntensityText(event) {
@@ -1155,7 +1159,7 @@ function updateDangerBanner() {
 
   const ago = formatAgo(worst.time);
   banner.hidden = false;
-  banner.innerHTML = `<strong>You are inside a strong-shaking zone</strong>
+  banner.innerHTML = `<strong>Intense shaking estimated at your location</strong>
     <span>M${worst.magnitude.toFixed(1)} · ${escapeHtml(worst.location)}${ago ? " · " + escapeHtml(ago) : ""}.
     Estimated intensity at your location: ${worst.intensity.toFixed(1)}.
     Aftershocks are possible. Stay clear of damaged structures.</span>`;
@@ -1658,6 +1662,7 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
 
 
