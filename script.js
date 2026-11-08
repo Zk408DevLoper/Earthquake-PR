@@ -1234,6 +1234,157 @@ document.addEventListener("click", event => {
   }
 });
 
+"use strict";
+
+let locationAccuracy = null;
+let addressLocation = null;
+let addressText = "Tap to look up your street address";
+let addressBusy = false;
+let addressAttempt = 0;
+let frequencyLocation = null;
+let frequencyBusy = false;
+let frequencyUpdated = 0;
+
+function updateLocationPopup() {
+  if (!userMarker) return;
+  const content = document.createElement("div");
+  const title = document.createElement("strong");
+  title.textContent = "Your location";
+  const details = document.createElement("p");
+  details.textContent = `${addressText}\n${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)}\nGPS accuracy: ${Number.isFinite(locationAccuracy) ? "±" + Math.round(locationAccuracy) + " m" : "unavailable"}. Address is approximate.`;
+  details.style.whiteSpace = "pre-line";
+  content.append(title, details);
+  userMarker.setPopupContent(content);
+}
+
+window.receiveStreetAddress = function (latitude, longitude, address) {
+  addressBusy = false;
+  if (userLatitude === null || calculateDistance(latitude, longitude, userLatitude, userLongitude) > 0.1) return;
+  addressLocation = [latitude, longitude];
+  addressText = address || "Street address unavailable. Use the coordinates above.";
+  updateLocationPopup();
+};
+
+function requestStreetAddress() {
+  updateLocationPopup();
+  if (addressBusy || Date.now() - addressAttempt < 10000) return;
+  if (addressLocation && calculateDistance(...addressLocation, userLatitude, userLongitude) < 0.1) return;
+  if (!window.AndroidBridge || typeof window.AndroidBridge.resolveStreetAddress !== "function") {
+    addressText = "Street address lookup is available in the updated Android app.";
+    updateLocationPopup();
+    return;
+  }
+  addressAttempt = Date.now();
+  addressBusy = true;
+  addressText = "Looking up street address…";
+  updateLocationPopup();
+  window.AndroidBridge.resolveStreetAddress(userLatitude, userLongitude);
+  window.setTimeout(() => { if (addressBusy) { addressBusy = false; addressText = "Address lookup timed out. Tap again to retry."; updateLocationPopup(); } }, 15000);
+}
+
+const originalUpdateUserMarker = updateUserMarker;
+updateUserMarker = function () {
+  const existing = userMarker;
+  originalUpdateUserMarker();
+  if (userMarker && !existing) userMarker.on("popupopen", requestStreetAddress);
+  if (addressLocation && calculateDistance(...addressLocation, userLatitude, userLongitude) >= 0.1) {
+    addressLocation = null;
+    addressText = "Tap to look up your street address";
+  }
+  updateLocationPopup();
+};
+const originalPositionUpdate = handlePositionUpdate;
+handlePositionUpdate = function (position) {
+  locationAccuracy = position.coords.accuracy;
+  originalPositionUpdate(position);
+  updateLocationPopup();
+  loadLocalFrequency();
+};
+
+async function loadLocalFrequency(force = false) {
+  const status = document.getElementById("frequency-status");
+  if (!status || userLatitude === null || frequencyBusy) return;
+  if (!force && frequencyLocation && Date.now() - frequencyUpdated < 300000 && calculateDistance(...frequencyLocation, userLatitude, userLongitude) < 1) return;
+  frequencyBusy = true;
+  const latitude = userLatitude, longitude = userLongitude, now = Date.now();
+  status.textContent = "Loading EMSC reports…";
+  document.getElementById("frequency-counts").textContent = "";
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const ids = new Set(), times = [];
+    let offset = 1;
+    while (true) {
+      const params = new URLSearchParams({ format: "json", latitude: String(latitude), longitude: String(longitude), maxradius: String(100 / 111.195), starttime: new Date(now - 30 * 86400000).toISOString().slice(0, 19), endtime: new Date(now).toISOString().slice(0, 19), orderby: "time", limit: "1000", offset: String(offset) });
+      const response = await fetch(`${EARTHQUAKE_API_BASE}?${params}`, { signal: controller.signal });
+      if (response.status === 204) break;
+      if (!response.ok) throw new Error("EMSC request failed");
+      const data = await response.json();
+      if (!Array.isArray(data.features)) throw new Error("Invalid EMSC response");
+      let added = 0;
+      for (const feature of data.features) {
+        const event = eventFromFeature(feature, offset);
+        if (!event || ids.has(event.id)) continue;
+        ids.add(event.id); added++;
+        const time = getEventTimeMs(event);
+        if (Number.isFinite(time) && time <= now && calculateDistance(latitude, longitude, event.latitude, event.longitude) <= 100) times.push(time);
+      }
+      if (data.features.length < 1000) break;
+      if (!added || offset >= 20000) throw new Error("Result too large to count completely");
+      offset += data.features.length;
+    }
+    if (calculateDistance(latitude, longitude, userLatitude, userLongitude) >= 1) { status.textContent = "Location changed. Refresh to count this area."; return; }
+    const counts = [1, 7, 30].map(days => times.filter(time => time >= now - days * 86400000).length);
+    document.getElementById("frequency-counts").textContent = `24 hours: ${counts[0]} · 7 days: ${counts[1]} · 30 days: ${counts[2]}`;
+    status.textContent = `Within 100 km of ${latitude.toFixed(3)}, ${longitude.toFixed(3)}. Updated ${new Date(now).toLocaleTimeString()}. EMSC reported events only; this is not a prediction.`;
+    frequencyLocation = [latitude, longitude]; frequencyUpdated = now;
+  } catch (error) {
+    status.textContent = "Earthquake frequency unavailable. Tap Refresh to retry.";
+  } finally { clearTimeout(timer); frequencyBusy = false; }
+}
+
+let emergencyContacts = [];
+try {
+  const stored = JSON.parse(localStorage.getItem("eq_emergency_contacts") || "[]");
+  if (Array.isArray(stored)) emergencyContacts = stored.filter(contact => contact && typeof contact.name === "string" && /^\+?[0-9 ()-]{3,25}$/.test(contact.phone)).slice(0, 20);
+} catch (_) {}
+
+function renderEmergencyContacts() {
+  const list = document.getElementById("emergency-contact-list");
+  list.replaceChildren();
+  if (!emergencyContacts.length) list.textContent = "No contacts saved yet. Add family, a trusted person, or a verified local emergency number.";
+  emergencyContacts.forEach((contact, index) => {
+    const row = document.createElement("div"); row.className = "contact-row";
+    const call = document.createElement("a");
+    call.textContent = `${contact.name} · ${contact.phone}`;
+    call.href = "tel:" + contact.phone.replace(/[ ()-]/g, "");
+    const remove = document.createElement("button"); remove.type = "button"; remove.className = "text-button"; remove.textContent = "Remove";
+    remove.setAttribute("aria-label", `Remove ${contact.name}`);
+    remove.onclick = () => saveEmergencyContacts(emergencyContacts.filter((_, i) => i !== index));
+    row.append(call, remove); list.append(row);
+  });
+}
+function saveEmergencyContacts(next) {
+  try { localStorage.setItem("eq_emergency_contacts", JSON.stringify(next)); emergencyContacts = next; renderEmergencyContacts(); return true; }
+  catch (_) { showToast("Could not save contacts on this device."); return false; }
+}
+document.getElementById("emergency-contact-form").addEventListener("submit", event => {
+  event.preventDefault();
+  const name = document.getElementById("contact-name").value.trim();
+  const phone = document.getElementById("contact-phone").value.trim();
+  if (!name || !/^\+?[0-9 ()-]{3,25}$/.test(phone) || (phone.match(/\d/g) || []).length < 3) { showToast("Enter a name and valid phone number."); return; }
+  if (emergencyContacts.length >= 20) { showToast("You can save up to 20 contacts."); return; }
+  if (saveEmergencyContacts([...emergencyContacts, { name, phone }])) event.target.reset();
+});
+document.getElementById("frequency-refresh").addEventListener("click", () => loadLocalFrequency(true));
+renderEmergencyContacts();
+
+for (const type of ["copy", "cut", "contextmenu", "selectstart"]) {
+  document.addEventListener(type, event => {
+    if (!event.target.closest("input, textarea, [contenteditable='true']")) event.preventDefault();
+  });
+}
+
 loadSavedTheme();
 initializeMap();
 renderTimeline();
@@ -1270,3 +1421,4 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
