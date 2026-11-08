@@ -674,9 +674,12 @@ function eventFromFeature(feature, index) {
   const rawTime = properties.time || properties.lastupdate || properties.updated || null;
   const magnitude = toNumberOrNull(properties.mag ?? properties.magnitude);
 
-  // Depth is reported as a negative number in the coordinates, so always show it as positive.
-  const rawDepth = toNumberOrNull(properties.depth) ?? (coordinates.length > 2 ? toNumberOrNull(coordinates[2]) : null);
-  const depth = rawDepth === null ? null : Math.abs(rawDepth);
+  // EMSC's depth property is positive km; GeoJSON elevation is negative below
+  // the surface. Normalize only the coordinate sign, not invalid property values.
+  const propertyDepth = toNumberOrNull(properties.depth);
+  const coordinateDepth = coordinates.length > 2 ? toNumberOrNull(coordinates[2]) : null;
+  const depth = propertyDepth !== null && propertyDepth >= 0
+    ? propertyDepth : coordinateDepth !== null ? Math.abs(coordinateDepth) : null;
 
   const location = properties.flynn_region || properties.region || properties.place || properties.title || "Location not reported";
   const id = String(feature.id || properties.source_id || properties.unid || `event-${index}`);
@@ -1005,6 +1008,11 @@ function selectEarthquake(eventId) {
     ? `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`
     : "Not available";
 
+  const hasReportedDepth = Number.isFinite(event.depth) && event.depth >= 0;
+  document.getElementById("report-depth-method").textContent = hasReportedDepth
+    ? `IPE uses EMSC reported depth (${event.depth.toLocaleString()} km). Mild ≥ 2 · Moderate ≥ 4 · Intense ≥ 5. Not measured shaking.`
+    : "Depth unavailable: IPE uses a 10 km fallback. Mild ≥ 2 · Moderate ≥ 4 · Intense ≥ 5. Not measured shaking.";
+
   // Summary and local estimate have different meanings; keep them visually separate.
   document.getElementById("report-magnitude").textContent = Number.isFinite(event.magnitude)
     ? `M ${event.magnitude.toFixed(1)}` : "Not reported";
@@ -1094,10 +1102,10 @@ function showSelectedEarthquakeOnMap() {
 
 /* ---------- Estimated shaking intensity (EQN isotropic IPE) ---------- */
 
-// Research configuration: the paper preliminarily assumes z = 10 km.
-// Preserve the catalogue depth for display, but use 10 km for all IPE estimates.
+// Use reported EMSC depth, including zero and shallow events. Missing or invalid
+// values use the paper's preliminary 10 km assumption, explicitly labeled in UI.
 function effectiveDepth(depthKm) {
-  return DEFAULT_DEPTH_KM;
+  return Number.isFinite(depthKm) && depthKm >= 0 ? depthKm : DEFAULT_DEPTH_KM;
 }
 
 // Source: Finazzi et al. (2024), Methods, doi:10.1038/s41598-024-55279-z.
@@ -1662,6 +1670,7 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
 
 
