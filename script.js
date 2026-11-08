@@ -419,6 +419,7 @@ async function ensureCountry(latitude, longitude) {
   const cached = readCachedCountry();
   if (cached && calculateDistance(cached.lookupLatitude, cached.lookupLongitude, latitude, longitude) < COUNTRY_RECHECK_KM) {
     userCountry = cached;
+    renderCountryEmergencyContacts();
     renderTimeline();
     loadEarthquakeData({ silent: true });
     return;
@@ -429,6 +430,7 @@ async function ensureCountry(latitude, longitude) {
     const found = await lookupCountry(latitude, longitude);
     if (found) {
       userCountry = found;
+      renderCountryEmergencyContacts();
       saveCachedCountry(found);
     } else {
       lastCountryLookupFailure = Date.now();
@@ -1472,6 +1474,93 @@ async function loadLocalFrequency(force = false) {
 /* ---------- Emergency contacts: local storage only ---------- */
 
 // Only open the dialer. The app never places a call automatically.
+// Official emergency directories, checked 2026-11-09. Keep country codes ISO 3166-1.
+// Never assume that 112/911 is universal. Unknown countries get no guessed number.
+const EU_EMERGENCY_SOURCE = "https://digital-strategy.ec.europa.eu/en/policies/112";
+const EMERGENCY_DIRECTORY = {
+  PH: { name: "Philippines", source: "https://ehotlines.e.gov.ph/", contacts: [{ name: "National emergency hotline", phone: "911" }] },
+  TW: { name: "Taiwan", source: "https://www.nfa.gov.tw/cht/?code=list&ids=66", contacts: [{ name: "Fire and ambulance", phone: "119" }, { name: "Police", phone: "110" }] },
+  IN: { name: "India", source: "https://112.gov.in/", contacts: [{ name: "Emergency services", phone: "112" }] },
+  US: { name: "United States", source: "https://www.911.gov/calling-911/", contacts: [{ name: "Emergency services", phone: "911" }] },
+  GB: { name: "United Kingdom", source: "https://www.gov.uk/guidance/999-and-112-the-uks-national-emergency-numbers", contacts: [{ name: "Emergency services", phone: "999" }] },
+  AU: { name: "Australia", source: "https://www.triplezero.gov.au/Documents/TripleZeroFactSheet.pdf", contacts: [{ name: "Police, fire and ambulance", phone: "000" }] },
+  NZ: { name: "New Zealand", source: "https://www.police.govt.nz/call-111", contacts: [{ name: "Police, fire and ambulance", phone: "111" }] }
+};
+for (const [code, name] of Object.entries({
+  AT: "Austria", BE: "Belgium", BG: "Bulgaria", HR: "Croatia", CY: "Cyprus", CZ: "Czechia",
+  DK: "Denmark", EE: "Estonia", FI: "Finland", FR: "France", DE: "Germany", GR: "Greece",
+  HU: "Hungary", IE: "Ireland", IT: "Italy", LV: "Latvia", LT: "Lithuania", LU: "Luxembourg",
+  MT: "Malta", NL: "Netherlands", PL: "Poland", PT: "Portugal", RO: "Romania", SK: "Slovakia",
+  SI: "Slovenia", ES: "Spain", SE: "Sweden"
+})) {
+  EMERGENCY_DIRECTORY[code] = { name, source: EU_EMERGENCY_SOURCE, contacts: [{ name: "Emergency services", phone: "112" }] };
+}
+
+// An in-session override handles travel, border areas, or unavailable geolocation.
+let emergencyCountryOverride = "";
+
+/** Display-only label plus an explicit, accessible dialer action. */
+function createContactRow(contact) {
+  const row = document.createElement("div");
+  row.className = "contact-row";
+  const label = document.createElement("div");
+  label.className = "contact-label";
+  const name = document.createElement("span");
+  name.textContent = contact.name;
+  const number = document.createElement("small");
+  number.textContent = contact.phone;
+  label.append(name, number);
+
+  const call = document.createElement("a");
+  call.className = "contact-call primary-button";
+  call.textContent = "Call";
+  call.href = "tel:" + contact.phone.replace(/[ ()-]/g, "");
+  call.setAttribute("aria-label", `Call ${contact.name} on ${contact.phone}`);
+  row.append(label, call);
+  return row;
+}
+
+function renderCountryEmergencyContacts() {
+  const list = document.getElementById("country-emergency-list");
+  if (!list) return;
+  list.replaceChildren();
+  const detectedCode = userCountry?.code?.toUpperCase() || "";
+  const code = emergencyCountryOverride || detectedCode;
+  const entry = EMERGENCY_DIRECTORY[code];
+  const status = document.getElementById("emergency-country-status");
+  const source = document.getElementById("emergency-country-source");
+  source.hidden = !entry;
+  if (!entry) {
+    status.textContent = code
+      ? `No verified preset available for ${userCountry?.name || code}. Add a verified local number below, or choose your country.`
+      : "Country not detected. Choose your country below to load verified emergency numbers.";
+    source.removeAttribute("href");
+    return;
+  }
+  status.textContent = `${entry.name} · ${emergencyCountryOverride ? "Selected manually" : "Detected from location"}. Confirm this is your current country before calling.`;
+  source.href = entry.source;
+  source.textContent = "Official number reference · checked Nov 9, 2026";
+  entry.contacts.forEach(contact => list.append(createContactRow(contact)));
+}
+
+function initializeEmergencyCountryPicker() {
+  const picker = document.getElementById("emergency-country-select");
+  Object.entries(EMERGENCY_DIRECTORY)
+    .sort((a, b) => a[1].name.localeCompare(b[1].name))
+    .forEach(([code, entry]) => {
+      const option = document.createElement("option");
+      option.value = code;
+      option.textContent = entry.name;
+      picker.append(option);
+    });
+  picker.addEventListener("change", () => {
+    emergencyCountryOverride = picker.value;
+    renderCountryEmergencyContacts();
+  });
+  renderCountryEmergencyContacts();
+}
+
+
 let emergencyContacts = [];
 try {
   const stored = JSON.parse(localStorage.getItem("eq_emergency_contacts") || "[]");
@@ -1483,16 +1572,12 @@ function renderEmergencyContacts() {
   list.replaceChildren();
   if (!emergencyContacts.length) list.textContent = "No contacts saved yet. Add family, a trusted person, or a verified local emergency number.";
   emergencyContacts.forEach((contact, index) => {
-    const row = document.createElement("div"); row.className = "contact-row";
-    const call = document.createElement("a");
-    const name = document.createElement("span"); name.textContent = contact.name;
-    const number = document.createElement("small"); number.textContent = contact.phone;
-    call.append(name, number);
-    call.href = "tel:" + contact.phone.replace(/[ ()-]/g, "");
+    const row = createContactRow(contact);
     const remove = document.createElement("button"); remove.type = "button"; remove.className = "text-button"; remove.textContent = "Remove";
     remove.setAttribute("aria-label", `Remove ${contact.name}`);
     remove.onclick = () => saveEmergencyContacts(emergencyContacts.filter((_, i) => i !== index));
-    row.append(call, remove); list.append(row);
+    row.append(remove);
+    list.append(row);
   });
 }
 function saveEmergencyContacts(next) {
@@ -1509,6 +1594,7 @@ document.getElementById("emergency-contact-form").addEventListener("submit", eve
 });
 document.getElementById("frequency-refresh").addEventListener("click", () => loadLocalFrequency(true));
 renderEmergencyContacts();
+initializeEmergencyCountryPicker();
 
 /* ---------- Text interaction ---------- */
 
@@ -1703,6 +1789,7 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
 
 
