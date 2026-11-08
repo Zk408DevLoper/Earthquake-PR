@@ -1238,7 +1238,7 @@ document.addEventListener("click", event => {
 
 let locationAccuracy = null;
 let addressLocation = null;
-let addressText = "Tap to look up your street address";
+let addressText = "Tap to show your city and province";
 let addressBusy = false;
 let addressAttempt = 0;
 let frequencyLocation = null;
@@ -1251,17 +1251,17 @@ function updateLocationPopup() {
   const title = document.createElement("strong");
   title.textContent = "Your location";
   const details = document.createElement("p");
-  details.textContent = `${addressText}\n${userLatitude.toFixed(6)}, ${userLongitude.toFixed(6)}\nGPS accuracy: ${Number.isFinite(locationAccuracy) ? "±" + Math.round(locationAccuracy) + " m" : "unavailable"}. Address is approximate.`;
+  details.textContent = addressText;
   details.style.whiteSpace = "pre-line";
   content.append(title, details);
   userMarker.setPopupContent(content);
 }
 
-window.receiveStreetAddress = function (latitude, longitude, address) {
+window.receiveCityProvince = function (latitude, longitude, address) {
   addressBusy = false;
   if (userLatitude === null || calculateDistance(latitude, longitude, userLatitude, userLongitude) > 0.1) return;
   addressLocation = [latitude, longitude];
-  addressText = address || "Street address unavailable. Use the coordinates above.";
+  addressText = address || "City and province unavailable.";
   updateLocationPopup();
 };
 
@@ -1269,16 +1269,16 @@ function requestStreetAddress() {
   updateLocationPopup();
   if (addressBusy || Date.now() - addressAttempt < 10000) return;
   if (addressLocation && calculateDistance(...addressLocation, userLatitude, userLongitude) < 0.1) return;
-  if (!window.AndroidBridge || typeof window.AndroidBridge.resolveStreetAddress !== "function") {
-    addressText = "Street address lookup is available in the updated Android app.";
+  if (!window.AndroidBridge || typeof window.AndroidBridge.resolveCityProvince !== "function") {
+    addressText = "City and province lookup requires the updated Android app.";
     updateLocationPopup();
     return;
   }
   addressAttempt = Date.now();
   addressBusy = true;
-  addressText = "Looking up street address…";
+  addressText = "Finding city and province…";
   updateLocationPopup();
-  window.AndroidBridge.resolveStreetAddress(userLatitude, userLongitude);
+  window.AndroidBridge.resolveCityProvince(userLatitude, userLongitude);
   window.setTimeout(() => { if (addressBusy) { addressBusy = false; addressText = "Address lookup timed out. Tap again to retry."; updateLocationPopup(); } }, 15000);
 }
 
@@ -1289,7 +1289,7 @@ updateUserMarker = function () {
   if (userMarker && !existing) userMarker.on("popupopen", requestStreetAddress);
   if (addressLocation && calculateDistance(...addressLocation, userLatitude, userLongitude) >= 0.1) {
     addressLocation = null;
-    addressText = "Tap to look up your street address";
+    addressText = "Tap to show your city and province";
   }
   updateLocationPopup();
 };
@@ -1335,7 +1335,14 @@ async function loadLocalFrequency(force = false) {
     }
     if (calculateDistance(latitude, longitude, userLatitude, userLongitude) >= 1) { status.textContent = "Location changed. Refresh to count this area."; return; }
     const counts = [1, 7, 30].map(days => times.filter(time => time >= now - days * 86400000).length);
-    document.getElementById("frequency-counts").textContent = `24 hours: ${counts[0]} · 7 days: ${counts[1]} · 30 days: ${counts[2]}`;
+    const countPanel = document.getElementById("frequency-counts");
+    countPanel.replaceChildren();
+    counts.forEach((count, index) => {
+      const column = document.createElement("span");
+      const value = document.createElement("span"); value.className = "frequency-value"; value.textContent = String(count);
+      const label = document.createElement("span"); label.className = "frequency-label"; label.textContent = ["24 hours", "7 days", "30 days"][index];
+      column.append(value, label); countPanel.append(column);
+    });
     status.textContent = `Within 100 km of ${latitude.toFixed(3)}, ${longitude.toFixed(3)}. Updated ${new Date(now).toLocaleTimeString()}. EMSC reported events only; this is not a prediction.`;
     frequencyLocation = [latitude, longitude]; frequencyUpdated = now;
   } catch (error) {
@@ -1356,7 +1363,9 @@ function renderEmergencyContacts() {
   emergencyContacts.forEach((contact, index) => {
     const row = document.createElement("div"); row.className = "contact-row";
     const call = document.createElement("a");
-    call.textContent = `${contact.name} · ${contact.phone}`;
+    const name = document.createElement("span"); name.textContent = contact.name;
+    const number = document.createElement("small"); number.textContent = contact.phone;
+    call.append(name, number);
     call.href = "tel:" + contact.phone.replace(/[ ()-]/g, "");
     const remove = document.createElement("button"); remove.type = "button"; remove.className = "text-button"; remove.textContent = "Remove";
     remove.setAttribute("aria-label", `Remove ${contact.name}`);
@@ -1421,4 +1430,5 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
