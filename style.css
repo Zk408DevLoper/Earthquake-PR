@@ -354,3 +354,35 @@ body { font-size:14px; line-height:1.5; }
 #historical-test-result[data-threshold="below"] { border-color:var(--green); }
 .historical-test-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
 .historical-test-actions .secondary-button { margin-top:0; }
+
+
+/* Report hierarchy: magnitude, local shaking estimate, then catalogue metadata. */
+#event-details-view .page-intro { padding-bottom:20px; }
+#event-details-location { font-size:16px; color:var(--text); margin-top:10px; line-height:1.5; }
+.report-summary { display:grid; grid-template-columns:minmax(130px,1fr) minmax(0,1.4fr); gap:20px; padding:20px 0; border-top:1px solid var(--border); border-bottom:1px solid var(--border); margin-bottom:24px; }
+.report-magnitude { display:flex; flex-direction:column; align-items:flex-start; gap:5px; }
+.report-magnitude > span, .report-magnitude small { font-size:12px; color:var(--muted); }
+.report-magnitude strong { font-size:40px; line-height:1.2; font-weight:600; letter-spacing:-1px; font-variant-numeric:tabular-nums; }
+.report-context { align-self:center; min-width:0; }
+.report-context > span { color:var(--muted); font-size:12px; }
+.report-context p { font-size:14px; line-height:1.6; margin:6px 0 0; overflow-wrap:anywhere; }
+.report-shaking { background:var(--surface); border:1px solid var(--border); border-radius:10px; padding:18px; margin-bottom:28px; }
+.report-shaking-heading { display:flex; align-items:flex-start; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+.report-shaking h3, .report-section-title { margin:0; font-size:14px; font-weight:600; }
+#report-threshold { font-size:11px; padding:3px 7px; border:1px solid var(--border); border-radius:4px; color:var(--muted); }
+#report-threshold[data-state="crossed"] { color:#ffc98e; border-color:rgba(242,141,72,.4); }
+.report-shaking-value { display:flex; align-items:center; gap:16px; margin-top:18px; }
+.report-shaking-value strong { font-size:32px; line-height:1.2; font-weight:600; font-variant-numeric:tabular-nums; }
+.report-shaking-value p { margin:0; font-size:14px; color:var(--muted); line-height:1.6; }
+.report-section-title { margin-bottom:8px; }
+#event-details-view .event-details-fields > div { grid-template-columns:minmax(110px,1fr) minmax(0,1.5fr); padding:15px 0; }
+#event-details-view .event-details-fields dd { text-align:right; }
+#event-details-view .event-details-fields > div:last-child dd { font-size:12px; color:var(--muted); }
+#event-details-map { min-height:48px; }
+@media(max-width:360px) {
+  .report-summary { gap:12px; grid-template-columns:minmax(110px,1fr) minmax(0,1fr); }
+  .report-magnitude strong { font-size:34px; }
+  .report-shaking { padding:15px; }
+  #event-details-view .event-details-fields > div { grid-template-columns:1fr; gap:5px; }
+  #event-details-view .event-details-fields dd { text-align:left; }
+}
