@@ -243,3 +243,87 @@ input, textarea, [contenteditable="true"] { -webkit-user-select: text; user-sele
 .contact-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 0; border-bottom:1px solid var(--border); }
 .contact-row a { color:var(--accent-light); overflow-wrap:anywhere; padding:8px 0; }
 #frequency-counts { font-weight:700; margin-bottom:8px; color:var(--text); }
+
+
+/* Shared spacing and quiet surfaces. */
+:root { --radius: 10px; }
+body { font-size:14px; line-height:1.5; }
+.view { padding:24px 18px 28px; }
+.topbar { height:60px; padding-inline:18px; }
+.eyebrow { display:none; }
+.brand-mark { background:transparent; border:0; border-radius:0; }
+.brand-copy h1 { font-size:18px; font-weight:600; letter-spacing:0; }
+.section-kicker { color:var(--muted); font-size:11px; font-weight:500; letter-spacing:0; text-transform:none; margin-bottom:6px; }
+.page-intro { padding:0 0 20px; }
+.page-intro > .section-kicker { display:none; }
+.page-intro h2, .map-heading-row h2 { font-size:22px; font-weight:600; letter-spacing:-.3px; line-height:1.3; }
+.page-intro > p:last-child { font-size:13px; }
+.status-strip { padding:8px 18px; font-size:11px; align-items:baseline; flex-wrap:wrap; gap:4px 12px; }
+.status-label { flex:1 1 170px; }
+.updated-label { font-variant-numeric:tabular-nums; }
+.status-dot.online { box-shadow:none; }
+.map-heading-row { display:grid; grid-template-columns:minmax(0,1fr); align-items:start; gap:10px; padding:0 0 16px; }
+.map-heading-row .location-coordinates { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 8px; text-align:left; }
+.location-coordinates span, .location-coordinates strong { font-size:12px; line-height:1.5; }
+.location-coordinates strong { font-weight:500; font-variant-numeric:tabular-nums; }
+.map-card { border-radius:10px; }
+.map-gradient { display:none; }
+.map-chip { border-radius:5px; font-size:11px; font-weight:500; letter-spacing:0; backdrop-filter:none; }
+.map-chip .pulse-dot { box-shadow:none; }
+.map-legend { border-radius:5px; font-size:10px; }
+.nearest-card { padding:18px; background:var(--surface); box-shadow:none; margin-top:18px; }
+.card-heading { align-items:flex-start; gap:10px; }
+.card-heading-icon { display:none; }
+.card-heading-copy h2 { font-size:16px; font-weight:600; }
+.card-heading-copy .section-kicker { font-size:11px; font-weight:400; }
+.magnitude-badge { border-radius:5px; font-size:12px; padding:4px 8px; }
+.nearest-location { font-size:15px; font-weight:500; margin:16px 0; overflow-wrap:anywhere; }
+.stats-grid { gap:0; align-items:start; }
+.stat-item { padding-inline:12px; }
+.stat-item strong { font-size:clamp(18px,5vw,24px); font-weight:600; font-variant-numeric:tabular-nums; overflow-wrap:anywhere; line-height:1.35; letter-spacing:0; }
+.stat-label, .stat-unit { font-size:11px; line-height:1.5; }
+.intensity-note { font-size:12px; line-height:1.6; }
+.location-row { align-items:flex-start; padding-top:16px; }
+.location-row-icon { background:transparent; border-radius:0; width:24px; flex-basis:24px; }
+.data-note { font-size:11px; line-height:1.6; color:var(--muted); }
+.info-panel, .settings-panel, .source-panel, .home-latest, .about-card { padding:18px; margin:0 0 18px; border-radius:10px; }
+.info-panel h3, .settings-panel h3, .source-panel h3 { font-size:16px; font-weight:600; margin:0 0 10px; }
+.overview-grid { gap:12px; margin-bottom:18px; }
+.overview-tile { padding:16px; border-radius:8px; }
+.overview-tile strong { font-size:26px; font-weight:600; margin:8px 0 4px; }
+.tile-label, .tile-foot { font-size:12px; }
+.overview-tile:nth-child(2) strong { font-size:18px; }
+.home-latest { margin-top:18px; }
+.home-latest-meta { flex-wrap:wrap; font-size:12px; }
+.earthquake-item { border-radius:8px; padding:14px; align-items:center; }
+.event-magnitude { border-radius:6px; font-weight:600; }
+.event-content strong { font-size:14px; font-weight:500; }
+.event-content span { font-size:12px; }
+.menu-row { border-radius:8px; }
+.menu-row-icon { background:transparent; border-radius:0; width:28px; flex-basis:28px; }
+.menu-row strong { font-size:14px; font-weight:500; }
+.menu-row small { font-size:12px; }
+.settings-hint { font-size:13px; }
+.primary-button, .secondary-button { border-radius:6px; font-weight:600; font-size:14px; }
+.text-button { font-size:13px; }
+#frequency-counts { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin:18px 0; }
+.frequency-value { display:block; font-size:25px; line-height:1.2; font-weight:600; font-variant-numeric:tabular-nums; }
+.frequency-label { display:block; font-size:12px; font-weight:400; color:var(--muted); margin-top:6px; }
+#emergency-contact-form { grid-template-columns:minmax(0,1fr); gap:8px; margin-top:20px; }
+#emergency-contact-form label { font-size:13px; margin-top:6px; }
+#emergency-contact-form input { border-radius:6px; font-size:16px; min-height:44px; }
+#emergency-contact-form button { margin-top:8px; }
+.contact-row { align-items:center; gap:12px; }
+.contact-row a { display:grid; gap:2px; text-decoration:none; font-size:14px; min-width:0; }
+.contact-row small { font-size:13px; color:var(--muted); }
+.contact-row button { flex-shrink:0; }
+.member-card { background:transparent; border:0; padding:12px 0; border-radius:0; border-bottom:1px solid var(--border); }
+.member-avatar { background:transparent; border:0; color:var(--muted); border-radius:0; width:24px; flex-basis:24px; }
+.member-info strong { font-weight:500; font-size:14px; }
+.bottom-nav { backdrop-filter:none; background:var(--bg-top); }
+.nav-item { border-radius:6px; }
+.nav-item.active svg { filter:none; }
+.nav-item span { font-size:11px; font-weight:500; }
+.leaflet-popup-content { font-size:14px; line-height:1.5; }
+@media(min-width:760px) { .view { padding:28px 20px; } .bottom-nav { border-radius:10px; box-shadow:none; } }
+@media(max-width:360px) { .view { padding-inline:14px; } .stats-grid .stat-item { padding-inline:8px; } .stats-grid .stat-item:first-child { padding-left:0; } .stats-grid .stat-item:last-child { padding-right:0; } .overview-grid { grid-template-columns:1fr; } }
