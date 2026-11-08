@@ -341,3 +341,16 @@ body { font-size:14px; line-height:1.5; }
 @media(max-width:400px) {
   .event-details-fields > div { grid-template-columns:1fr; gap:4px; }
 }
+
+
+/* Historical previews stay visually separate from current reports. */
+.historical-test-panel > p, #historical-test-card p { font-size:13px; line-height:1.6; }
+#historical-test-card { margin-top:18px; padding-top:16px; border-top:1px solid var(--border); }
+#historical-test-card[hidden] { display:none; }
+#historical-test-title { margin:0 0 6px; font-size:15px; font-weight:600; }
+#historical-test-time { color:var(--muted); }
+#historical-test-result { padding:12px; background:var(--surface-soft); border-left:3px solid var(--muted); }
+#historical-test-result[data-threshold="crossed"] { border-color:var(--orange); }
+#historical-test-result[data-threshold="below"] { border-color:var(--green); }
+.historical-test-actions { display:flex; align-items:center; flex-wrap:wrap; gap:10px; }
+.historical-test-actions .secondary-button { margin-top:0; }
