@@ -446,3 +446,18 @@ button:disabled { opacity:.5; cursor:default; }
   .home-actions { grid-template-columns:1fr 1fr; }
   .home-actions button:last-child { grid-column:1 / -1; }
 }
+
+
+/* Call controls stay explicit and separate from contact removal. */
+.contact-row { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:10px; align-items:center; }
+.contact-label { display:grid; gap:3px; min-width:0; color:var(--text); font-size:14px; overflow-wrap:anywhere; }
+.contact-label small { color:var(--muted); font-size:13px; }
+.contact-row a.contact-call { display:inline-flex; justify-content:center; align-items:center; min-height:44px; padding:10px 16px; color:#001416; font-size:13px; text-decoration:none; }
+.country-emergency-block { margin-top:20px; }
+.country-emergency-block h4, .saved-contacts-heading { font-size:14px; font-weight:600; margin:20px 0 10px; }
+#emergency-country-status { font-size:13px; color:var(--muted); line-height:1.6; }
+.country-emergency-block label { display:block; margin:12px 0 6px; font-size:12px; }
+#emergency-country-select { width:100%; padding:12px; min-height:44px; font:inherit; color:var(--text); background:var(--surface-soft); border:1px solid var(--border); border-radius:6px; }
+#emergency-country-source { display:inline-block; color:var(--accent-light); font-size:11px; margin-top:10px; }
+#emergency-country-source[hidden] { display:none; }
+@media(max-width:360px) { .contact-row { grid-template-columns:minmax(0,1fr) auto; } .contact-row > button { grid-column:2; padding:4px 0; min-height:32px; } }
