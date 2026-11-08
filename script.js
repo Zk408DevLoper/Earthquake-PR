@@ -1,5 +1,15 @@
 "use strict";
 
+/**
+ * Earthquake Monitor contributor guide
+ * -----------------------------------
+ * Settings and shared state come first, followed by requests, country filtering,
+ * map rendering, timeline/details navigation, and device integrations.
+ * EMSC data is normalized by eventFromFeature() before reaching the UI.
+ * Location permission is optional; never substitute zero for missing coordinates.
+ * See README.md for setup, data sources, and the Android bridge contract.
+ */
+
 const EARTHQUAKE_API_BASE = "https://www.seismicportal.eu/fdsnws/event/1/query";
 const NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse";
 
@@ -56,6 +66,8 @@ let userLongitude = null;
 let earthquakeEvents = [];
 let eventsScope = "global"; // "global" (no location yet), "country" or "radius"
 let nearestEvent = null;
+// Keep a snapshot so a 30-second refresh cannot remove the event being read.
+let selectedEarthquake = null;
 let toastTimeout;
 let activeFetchController = null;
 
@@ -106,6 +118,7 @@ const elements = {
 const VIEW_TITLES = {
   "home-view": "Home",
   "timeline-view": "Earthquake Timeline",
+  "event-details-view": "Earthquake details",
   "map-view": "Earthquake Monitor",
   "menu-view": "Menu",
   "about-view": "About"
@@ -826,13 +839,17 @@ function updateUserMarker() {
 
   if (userMarker) {
     userMarker.setLatLng([userLatitude, userLongitude]);
+    resetMovedLocationAddress();
+    updateLocationPopup();
     return;
   }
 
   const icon = L.divIcon({ className: "", html: '<div class="user-marker"></div>', iconSize: [16, 16], iconAnchor: [8, 8] });
   userMarker = L.marker([userLatitude, userLongitude], { icon, title: "Your location", zIndexOffset: 1000 })
-    .bindPopup("<strong>Your location</strong><br>GPS coordinates from this device")
+    .bindPopup("Your location")
     .addTo(earthquakeMap);
+  userMarker.on("popupopen", requestStreetAddress);
+  updateLocationPopup();
 }
 
 // Calculates the distance to every event, then picks the nearest one that
@@ -967,9 +984,57 @@ function renderTimeline() {
   }).join("");
 }
 
+/** Open the report first. Map navigation is a separate, explicit action. */
 function selectEarthquake(eventId) {
   const event = earthquakeEvents.find(item => item.id === eventId);
+  if (!event) {
+    showToast("This report is no longer in the timeline. Refresh and try again.");
+    return;
+  }
+
+  selectedEarthquake = { ...event };
+  const details = document.getElementById("event-details-fields");
+  document.getElementById("event-details-location").textContent = event.location;
+  const formatNumber = (value, suffix = "") => Number.isFinite(value)
+    ? `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`
+    : "Not available";
+
+  // Use textContent: region names and other catalogue values are external data.
+  const fields = [
+    ["Time (your time zone)", formatDate(event.time)],
+    ["Magnitude", formatNumber(event.magnitude)],
+    ["Depth", formatNumber(event.depth, " km")],
+    ["Distance from you", formatNumber(event.distance, " km")],
+    ["Epicenter", `${event.latitude.toFixed(5)}, ${event.longitude.toFixed(5)}`],
+    ["Estimated intensity near you", Number.isFinite(event.intensity)
+      ? `${event.intensity.toFixed(1)} · ${describeIntensity(event.intensity)}`
+      : "Allow location access to estimate shaking near you."],
+    ["Source", "EMSC / SeismicPortal"],
+    ["Event ID", event.id]
+  ];
+  details.replaceChildren();
+  fields.forEach(([label, value]) => {
+    const row = document.createElement("div");
+    const term = document.createElement("dt");
+    const description = document.createElement("dd");
+    term.textContent = label;
+    description.textContent = value;
+    row.append(term, description);
+    details.append(row);
+  });
+
+  switchView("event-details-view");
+  document.getElementById("event-details-heading").focus({ preventScroll: true });
+}
+
+/** Show the saved report even if it has left the latest catalogue response. */
+function showSelectedEarthquakeOnMap() {
+  const event = selectedEarthquake;
   if (!event) return;
+  if (!earthquakeMap) {
+    showToast("The map is unavailable. Check your connection and reload.");
+    return;
+  }
   switchView("map-view");
   if (earthquakeMap) {
     // Looking at an event: pause following the user for a while.
@@ -1088,6 +1153,7 @@ function degreesToRadians(degrees) {
 /* ---------- Live GPS ---------- */
 
 function handlePositionUpdate(position) {
+  locationAccuracy = position.coords.accuracy;
   const latitude = position.coords.latitude;
   const longitude = position.coords.longitude;
   const isFirstFix = userLatitude === null || userLongitude === null;
@@ -1100,6 +1166,7 @@ function handlePositionUpdate(position) {
 
   userLatitude = latitude;
   userLongitude = longitude;
+  loadLocalFrequency();
 
   const coordinateText = `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
   elements.coordinates.textContent = coordinateText;
@@ -1184,7 +1251,8 @@ function switchView(viewId) {
   if (!target) return;
   document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === viewId));
   document.querySelectorAll(".nav-item").forEach(button => {
-    const active = button.dataset.view === viewId;
+    const navigationView = viewId === "event-details-view" ? "timeline-view" : viewId;
+    const active = button.dataset.view === navigationView;
     button.classList.toggle("active", active);
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
@@ -1229,13 +1297,28 @@ document.addEventListener("click", event => {
     return;
   }
 
+  if (button.id === "event-details-map") {
+    showSelectedEarthquakeOnMap();
+    return;
+  }
+
+  if (button.id === "event-details-back") {
+    switchView("timeline-view");
+    // Restore keyboard focus to the report that opened this view, if still loaded.
+    const report = Array.from(elements.earthquakeList.querySelectorAll("[data-event-id]"))
+      .find(item => item.dataset.eventId === selectedEarthquake?.id);
+    if (report) report.focus({ preventScroll: true });
+    return;
+  }
+
   if (button.id === "home-map-button") {
     switchView("map-view");
   }
 });
 
-"use strict";
+/* ---------- Device location details ---------- */
 
+// Coordinates are used for calculations; the popup displays city/province only.
 let locationAccuracy = null;
 let addressLocation = null;
 let addressText = "Tap to show your city and province";
@@ -1244,6 +1327,14 @@ let addressAttempt = 0;
 let frequencyLocation = null;
 let frequencyBusy = false;
 let frequencyUpdated = 0;
+
+// Invalidate the cached place label after moving at least 100 metres.
+function resetMovedLocationAddress() {
+  if (addressLocation && calculateDistance(...addressLocation, userLatitude, userLongitude) >= 0.1) {
+    addressLocation = null;
+    addressText = "Tap to show your city and province";
+  }
+}
 
 function updateLocationPopup() {
   if (!userMarker) return;
@@ -1282,25 +1373,13 @@ function requestStreetAddress() {
   window.setTimeout(() => { if (addressBusy) { addressBusy = false; addressText = "Address lookup timed out. Tap again to retry."; updateLocationPopup(); } }, 15000);
 }
 
-const originalUpdateUserMarker = updateUserMarker;
-updateUserMarker = function () {
-  const existing = userMarker;
-  originalUpdateUserMarker();
-  if (userMarker && !existing) userMarker.on("popupopen", requestStreetAddress);
-  if (addressLocation && calculateDistance(...addressLocation, userLatitude, userLongitude) >= 0.1) {
-    addressLocation = null;
-    addressText = "Tap to show your city and province";
-  }
-  updateLocationPopup();
-};
-const originalPositionUpdate = handlePositionUpdate;
-handlePositionUpdate = function (position) {
-  locationAccuracy = position.coords.accuracy;
-  originalPositionUpdate(position);
-  updateLocationPopup();
-  loadLocalFrequency();
-};
+/* ---------- Nearby frequency, independent of the country timeline ---------- */
 
+/**
+ * Count reported events within 100 km over fixed UTC time windows.
+ * Pagination avoids treating a truncated response as the complete count.
+ * Cache for five minutes unless the user moves or explicitly refreshes.
+ */
 async function loadLocalFrequency(force = false) {
   const status = document.getElementById("frequency-status");
   if (!status || userLatitude === null || frequencyBusy) return;
@@ -1350,6 +1429,9 @@ async function loadLocalFrequency(force = false) {
   } finally { clearTimeout(timer); frequencyBusy = false; }
 }
 
+/* ---------- Emergency contacts: local storage only ---------- */
+
+// Only open the dialer. The app never places a call automatically.
 let emergencyContacts = [];
 try {
   const stored = JSON.parse(localStorage.getItem("eq_emergency_contacts") || "[]");
@@ -1388,12 +1470,18 @@ document.getElementById("emergency-contact-form").addEventListener("submit", eve
 document.getElementById("frequency-refresh").addEventListener("click", () => loadLocalFrequency(true));
 renderEmergencyContacts();
 
+/* ---------- Text interaction ---------- */
+
+// This is a UI preference, not content protection. Keep form editing available.
 for (const type of ["copy", "cut", "contextmenu", "selectstart"]) {
   document.addEventListener(type, event => {
     if (!event.target.closest("input, textarea, [contenteditable='true']")) event.preventDefault();
   });
 }
 
+/* ---------- Startup and refresh lifecycle ---------- */
+
+// Run after all state declarations and handlers have been initialized.
 loadSavedTheme();
 initializeMap();
 renderTimeline();
@@ -1430,5 +1518,6 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
 
