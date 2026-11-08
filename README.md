@@ -27,7 +27,7 @@ Timeline buttons call `selectEarthquake(eventId)` to render the details page. It
 - The timeline displays up to 300 reports from the past seven days in the user's country, including the configured offshore buffer. Without a resolved country, it uses a nearby radius. This limited timeline is not a complete historical catalogue.
 - The nearest-event card uses the past two days. Distances are calculated from the device position to reported epicenters.
 - Nearby frequency is a separate paginated query within 100 km for the past 30 days. The 24-hour, seven-day, and 30-day counts share one fixed query end time. Results are cached for five minutes, with manual refresh available. They describe reported events, not forecasts.
-- Shaking intensity is an empirical estimate. The IPE assumes a fixed 10 km depth; reported catalogue depth remains visible; it is not measured ground motion or an early-warning guarantee.
+- Shaking intensity is an empirical estimate. The IPE uses valid EMSC reported depth, with 10 km as a missing/invalid-depth fallback; it is not measured ground motion or an early-warning guarantee.
 - Country boundaries come from OpenStreetMap Nominatim. Its public server has strict usage limits; review its policy before changing lookup behavior or deploying to a large audience. City/province labels use Android's Geocoder when available.
 
 API documentation: [EMSC / SeismicPortal](https://www.seismicportal.eu/fdsn-wsevent.html). Country lookup policy: [Nominatim usage policy](https://operations.osmfoundation.org/policies/nominatim/). The public Nominatim service limits total application traffic to one request per second, requires identifying requests and attribution, and discourages periodic lookups. Use a suitable provider or your own service as traffic grows.
@@ -72,8 +72,14 @@ This checks website intensity classification. It does not exercise the Android s
 
 Reference: Finazzi, F., Bossu, R. & Cotton, F. (2024). *Smartphones enabled up to 58 s strong-shaking warning in the M7.8 Türkiye earthquake*. Scientific Reports 14, 4878. https://doi.org/10.1038/s41598-024-55279-z
 
-The website and Android service use `I = -2.15 log10(r) + 1.03 M + 2.31` and the paper's preliminary depth assumption of 10 km. Mild is 2 ≤ I < 4; moderate is 4 ≤ I < 5; intense is I ≥ 5. Comparisons use unrounded values. Android's ordinary notification threshold is now 2; the website intense-shaking banner and historical test threshold are now 5. Catalogue depths are still displayed as reported and must not be confused with model depth.
+The website and Android service use `I = -2.15 log10(r) + 1.03 M + 2.31` with EMSC reported depth when valid, otherwise the paper's 10 km preliminary assumption. Mild is 2 ≤ I < 4; moderate is 4 ≤ I < 5; intense is I ≥ 5. Comparisons use unrounded values. Android's ordinary notification threshold is now 2; the website intense-shaking banner and historical test threshold are now 5. The details page states whether reported depth or the 10 km fallback was used.
 
-This is an adaptation of the IPE and classification, not a reproduction of the complete EQN system. Magnitude and epicenter come from EMSC, not the paper's median-smartphone-acceleration estimator. The implementation uses the local approximation `r = sqrt(surfaceDistance² + 10²)`; the map radius uses spherical geometry, so this is not an exact numerical reproduction of every distance expression in the paper. Intensity is clamped to 0–12 as an application convention.
+This is an adaptation of the IPE and classification, not a reproduction of the complete EQN system. Magnitude and epicenter come from EMSC, not the paper's median-smartphone-acceleration estimator. The implementation uses the local approximation `r = sqrt(surfaceDistance² + effectiveDepth²)`; the map radius uses spherical geometry, so this is not an exact numerical reproduction of every distance expression in the paper. Intensity is clamped to 0–12 as an application convention.
 
 EMSC polling, search limits, baseline/seen-event suppression and freshness rules remain app-specific. The paper's 3-second acceleration updates, category-escalation re-alerts, wave-arrival countdown and warning-time validation have not been reproduced. Existing Android notification tests force a notification even below threshold. Research claims should distinguish IPE classification tests from detection, delivery latency and real early-warning performance. Regional accuracy has not been validated for the Philippines or other deployment locations.
+
+
+
+### Depth validation
+
+Both clients prefer a finite, nonnegative `properties.depth` in km, including zero and values below 1 km. If absent or invalid, finite GeoJSON coordinate elevation is converted to depth using its absolute value. If neither is usable, calculations use 10 km. Website unknown catalogue depth stays null for display; the model fallback is labeled separately. The existing 1 km minimum hypocentral distance prevents log10(0). This is a reported-parameter adaptation, not a fixed-depth reproduction of the paper.
