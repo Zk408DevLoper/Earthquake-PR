@@ -83,3 +83,36 @@ EMSC polling, search limits, baseline/seen-event suppression and freshness rules
 ### Depth validation
 
 Both clients prefer a finite, nonnegative `properties.depth` in km, including zero and values below 1 km. If absent or invalid, finite GeoJSON coordinate elevation is converted to depth using its absolute value. If neither is usable, calculations use 10 km. Website unknown catalogue depth stays null for display; the model fallback is labeled separately. The existing 1 km minimum hypocentral distance prevents log10(0). This is a reported-parameter adaptation, not a fixed-depth reproduction of the paper.
+
+
+## Android permissions and data handling
+
+The app's source manifest declares the following permissions. Review the **merged release manifest** in Android Studio before release: dependency libraries may add declarations, and this source review is not a certification of Play policy or legal compliance.
+
+| Permission | Purpose | Request / behavior |
+| --- | --- | --- |
+| `INTERNET` | HTTPS website, EMSC reports, map tiles, country/place lookup | Install-time normal permission; no runtime dialog |
+| `ACCESS_COARSE_LOCATION` | Approximate position for nearby events and intensity estimates | Runtime, after explanation; supported without fine access |
+| `ACCESS_FINE_LOCATION` | More precise position for distance calculations and city/province lookup | Runtime with coarse permission; user can choose approximate access |
+| `POST_NOTIFICATIONS` | Earthquake alerts and monitoring status | Runtime on Android 13+, after explanation; denial must not block website use |
+| `FOREGROUND_SERVICE` | Ongoing user-visible monitoring service | Normal manifest permission; persistent monitoring status subject to OS settings |
+| `FOREGROUND_SERVICE_LOCATION` | Declare the location foreground-service type on supported Android versions | Manifest capability; requires location access and eligible foreground-service startup |
+
+The source manifest does not request `ACCESS_BACKGROUND_LOCATION`, `READ_CONTACTS`, `CALL_PHONE`, camera, microphone, or SMS access. Entering a contact does not read the system address book. `ACTION_DIAL` opens the dialer and leaves the call decision to the user.
+
+### Permission flow
+
+Before requesting location, the Android host explains nearby reports, intensity estimates, continued foreground-service location use after the screen closes, external requests, and Settings controls. **Not now** continues without location and suppresses another request during that activity session. A new app launch can offer access again; Android controls whether another system prompt is allowed. Runtime denial resolves any pending WebView location callback as denied. Approximate-only location is accepted. Website location grants are restricted to the HTTPS GitHub Pages host.
+
+Notification access has its own explanation and **Not now** action. Notifications are optional and denied access must not block the website. Monitoring is started while the activity is visible after location permission is granted. This does not grant unrestricted background startup or guarantee monitoring survives OS termination. Users can revoke permissions through **Settings → Apps → Earthquake Monitor → Permissions**, adjust notifications separately, and stop monitoring through Android's active-app controls or force-stop.
+
+### Data and storage
+
+Coordinates are used in EMSC earthquake requests and OpenStreetMap Nominatim country queries. Android's geocoding provider receives coordinates to resolve city/province. Map providers receive tile requests indicating the viewed region. Contact names/numbers and preferences are stored in the website's local storage; contact numbers are not sent to EMSC or an app-owned contacts server. The manifest currently enables Android backup, so local app data may be included according to OS and backup rules. Clearing app storage removes local contacts/preferences. Check provider policies and retention separately before publishing a privacy policy.
+
+### Release verification still required
+
+Test on real devices: approximate-only permission, precise permission, denial, repeated denial, revocation while monitoring, notifications denied, and stopping the foreground service. Inspect the merged release manifest and Android location/foreground-service behavior for the actual target SDK. Verify that disclosure matches third-party services, the release's backup rules, and any analytics added later. Prepare the applicable store privacy policy, Data safety form and foreground-service declarations before distribution. These documentation changes do not establish automatic compliance with every platform or research protocol.
+
+Android references: [runtime permissions](https://developer.android.com/training/permissions/requesting), [location permissions](https://developer.android.com/develop/sensors-and-location/location/permissions), [foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types), [notification permission](https://developer.android.com/develop/ui/views/notifications/notification-permission).
+
