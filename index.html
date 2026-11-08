@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=7">
+  <link rel="stylesheet" href="style.css?v=8">
 </head>
 <body>
   <div class="app-shell">
@@ -46,11 +46,11 @@
       <section class="view active" id="map-view" aria-label="Earthquake map">
         <div class="map-heading-row">
           <div>
-            <p class="section-kicker">LIVE DATA VIEW</p>
-            <h2>Seismic activity</h2>
+            <p class="section-kicker">Recent reports</p>
+            <h2>Earthquake map</h2>
           </div>
-          <div class="location-coordinates" style="text-align:right;">
-            <span>Your location (live)</span>
+          <div class="location-coordinates" >
+            <span>Your location</span>
             <strong id="map-coordinates">Waiting for GPS…</strong>
           </div>
         </div>
@@ -59,7 +59,7 @@
           <div id="earthquake-map" role="application" aria-label="Map showing earthquake locations"></div>
           <div class="map-gradient" aria-hidden="true"></div>
           <div class="map-overlay-top">
-            <div class="map-chip"><span class="pulse-dot"></span> EARTHQUAKE MAP</div>
+            <div class="map-chip"><span class="pulse-dot"></span> Map</div>
             <div class="map-chip map-count"><span id="event-count">0</span> events</div>
           </div>
           <div class="map-legend" aria-label="Magnitude legend">
@@ -95,7 +95,7 @@
             <div class="location-row-icon" aria-hidden="true">
               <svg viewBox="0 0 24 24"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg>
             </div>
-            <div class="location-coordinates"><span>Your coordinates (live)</span><strong id="coordinates">Waiting for GPS…</strong></div>
+            <div class="location-coordinates"><span>Your coordinates</span><strong id="coordinates">Waiting for GPS…</strong></div>
           </div>
           <p class="data-note">Earthquake information reflects the latest data returned by the selected data service. It is not an earthquake early-warning guarantee. Estimated intensity uses an empirical formula and is not a measurement.</p>
         </section>
@@ -113,18 +113,19 @@
         <div id="earthquake-list" class="earthquake-list"><div class="empty-state">Loading earthquake events…</div></div>
       </section>
 
-      <section class="view" id="home-view" aria-label="Home summary"><section class="info-panel" aria-labelledby="frequency-title">
-<h3 id="frequency-title">Earthquake frequency nearby</h3>
+      <section class="view" id="home-view" aria-label="Home summary">
+        <div class="page-intro">
+          <p class="section-kicker">OVERVIEW</p>
+          <h2>Nearby earthquakes</h2>
+          <p>Recent reports near you.</p>
+        </div>
+<section class="info-panel" aria-labelledby="frequency-title">
+<h3 id="frequency-title">Earthquakes nearby</h3>
 <p id="frequency-counts" role="status"></p>
 <p id="frequency-status">Allow location access to see reports within 100 km.</p>
 <button id="frequency-refresh" type="button" class="text-button">Refresh</button>
 <p class="data-note">Source: EMSC / SeismicPortal earthquake catalogue.</p>
 </section>
-        <div class="page-intro">
-          <p class="section-kicker">OVERVIEW</p>
-          <h2>Your earthquake dashboard</h2>
-          <p>Your location and the latest reported seismic activity update automatically.</p>
-        </div>
         <div class="overview-grid">
           <div class="overview-tile"><span class="tile-label">Events loaded</span><strong id="home-event-count">0</strong><span class="tile-foot">available reports</span></div>
           <div class="overview-tile"><span class="tile-label">Your location</span><strong id="home-location-status">Not set</strong><span class="tile-foot" id="home-coordinates">Waiting for GPS…</span></div>
@@ -137,7 +138,13 @@
         </section>
       </section>
 
-      <section class="view" id="menu-view" aria-label="Application menu"><section class="settings-panel" aria-labelledby="emergency-title">
+      <section class="view" id="menu-view" aria-label="Application menu">
+        <div class="page-intro">
+          <p class="section-kicker">PREFERENCES</p>
+          <h2>Menu</h2>
+          <p>Contacts, appearance and data sources.</p>
+        </div>
+<section class="settings-panel" aria-labelledby="emergency-title">
 <h3 id="emergency-title">Emergency contacts</h3>
 <p class="settings-hint">Saved on this device. Tap a contact to open the dialer. Add the emergency number verified for your area.</p>
 <div id="emergency-contact-list"></div>
@@ -146,25 +153,20 @@
 <label for="contact-phone">Phone number</label><input id="contact-phone" type="tel" maxlength="25" required autocomplete="tel">
 <button class="primary-button" type="submit">Add contact</button>
 </form></section>
-        <div class="page-intro">
-          <p class="section-kicker">PREFERENCES</p>
-          <h2>Menu</h2>
-          <p>Settings and data information. Location and earthquake data update automatically.</p>
-        </div>
 
         <!-- Only shown inside the Android app. Remove after testing. -->
         <button class="menu-row" id="test-notification-button" type="button" style="display:none">
           <span class="menu-row-icon">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
           </span>
-          <span><strong>Test notification</strong><small>Goes to your home screen, then sends an alert for the latest reported earthquake</small></span>
+          <span><strong>Test notification</strong><small>Send a test alert</small></span>
           <span class="menu-chevron">›</span>
         </button>
 
         <section class="settings-panel" aria-labelledby="settings-title">
           <p class="section-kicker">SETTINGS</p>
           <h3 id="settings-title">Theme color</h3>
-          <p class="settings-hint">Choose a theme. It changes the background and the accent colors. Classic is the original look.</p>
+          <p class="settings-hint">Choose the app’s color.</p>
           <div id="theme-swatches" class="swatch-row" role="group" aria-label="Theme color"></div>
           <p class="settings-hint">Current theme: <strong id="theme-current-name">Classic</strong></p>
         </section>
@@ -271,3 +273,4 @@
   </script>
 </body>
 </html>
+
