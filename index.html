@@ -122,7 +122,7 @@
               <button id="historical-test-point" class="secondary-button" type="button">Use epicenter as test point</button>
               <button id="historical-test-remove" class="text-button" type="button">Remove test</button>
             </div>
-            <p class="data-note">Uses the same intensity formula and ≥ 6 threshold as the website banner. The epicenter option only changes this preview. This does not test Android background notifications.</p>
+            <p class="data-note">Uses the same intensity formula and ≥ 5 threshold as the website banner. The epicenter option only changes this preview. This does not test Android background notifications.</p>
           </article>
         </section>
         <div class="timeline-toolbar">
@@ -146,8 +146,9 @@
         <section class="report-shaking" aria-labelledby="report-shaking-heading">
           <div class="report-shaking-heading"><h3 id="report-shaking-heading">Estimated shaking near you</h3><span id="report-threshold"></span></div>
           <div class="report-shaking-value"><strong id="report-intensity">—</strong><p id="report-shaking-description"></p></div>
-          <p class="data-note">Calculated from your location, magnitude and depth. This is an estimate, not measured shaking.</p>
+          <p class="data-note">IPE estimate using EMSC magnitude, your distance and an assumed 10 km depth. Mild ≥ 2 · Moderate ≥ 4 · Intense ≥ 5. Not measured shaking.</p>
         </section>
+        <p class="data-note">Method adapted from <a href="https://www.nature.com/articles/s41598-024-55279-z" target="_blank" rel="noopener noreferrer">Finazzi et al. (2024)</a>. EMSC catalogue monitoring does not reproduce EQN smartphone detection or early-warning timing.</p>
         <h3 class="report-section-title">Report information</h3>
         <dl id="event-details-fields" class="event-details-fields"></dl>
         <p class="data-note">Details reflect the report when opened. Estimated shaking is not a measurement. Reports may be revised.</p>
@@ -314,6 +315,7 @@
   </script>
 </body>
 </html>
+
 
 
 
