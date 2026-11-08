@@ -129,3 +129,13 @@ Writes run on the monitoring worker, with bound values and transactions. Databas
 Rebuild/install Android, allow location, and let monitoring successfully retrieve reports. In Android Studio open App Inspection → Database Inspector → earthquake_research.db → earthquake_reports. For example: `SELECT event_id, reported_depth_km, model_depth_km, estimated_intensity, shaking_category FROM earthquake_reports ORDER BY last_saved_at DESC LIMIT 50;`
 
 The helper exposes `readRecentReports(limit)` for future native archive/export screens. The website timeline still uses live EMSC requests; this change does not add an archive screen or offline website timeline. SQLite schema checks passed in desktop SQLite; Android compilation and device persistence tests remain required.
+
+
+
+## Country emergency contacts
+
+Emergency services presets are separate from editable personal contacts. Each row has an explicit Call link, opening the dialer through the existing ACTION_DIAL handler; no CALL_PHONE or READ_CONTACTS permission is added. Presets are selected from the country lookup result, with a manual in-session override for travel, border areas and denied/unavailable location. The UI displays the country and asks users to confirm it. Unknown countries receive no guessed fallback number. Do not assume 112 or 911 works everywhere.
+
+Initial coverage: Philippines, Taiwan, India, United States, United Kingdom, Australia, New Zealand, and the 27 EU member states. Sources are attached to each country entry in EMERGENCY_DIRECTORY and linked from the UI. Verified 2026-11-09 against the Philippines eGov hotline directory, Taiwan National Fire Agency, India ERSS, US National 911 Program, UK government, Australia Triple Zero, New Zealand Police, and European Commission 112 directory. Recheck sources before adding or changing numbers. Emergency numbers remain strings to preserve leading zeros such as Australia's 000.
+
+This feature needs no additional location queries. It refreshes presets after the existing country lookup or cache assignment and never persists country services into the user's personal contact list. Cached country detection can be stale, so the explicit manual country selector remains available. Call-button tests inspect tel links without placing calls.
