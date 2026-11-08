@@ -55,3 +55,13 @@ Before submitting a change, run `node --check script.js`, then check the map, ti
 ## License
 
 No project license has been selected yet. Public source visibility alone does not grant an open-source license. The maintainers should choose a license before inviting reuse. Third-party libraries, map attribution, and EMSC data terms apply independently.
+
+
+
+## Historical threshold test
+
+Open **Timeline → Load 2022 Luzon earthquake** to fetch EMSC record `20220727_0000002` (M7.0, 2022-07-27, Luzon). The original event time, magnitude, depth and epicenter are preserved. The preview evaluates the same `expectedIntensity()` function and `meetsDangerThreshold()` predicate used by the website banner, using an unrounded intensity and the inclusive threshold of 6.
+
+The preview starts at the user's GPS position. **Use epicenter as test point** provides an above-threshold example without modifying device coordinates. The historical record is stored separately from `earthquakeEvents`, remains visible through live refreshes, and does not affect counts, nearest-current-event selection, or live warning banners. **Remove test** clears the preview and its map marker. It is session-only and is not saved locally.
+
+This checks website intensity classification. It does not exercise the Android service, its event-age checks, seen-event storage, permission handling, or notification delivery. Use Android's notification test separately when verifying the background service.
