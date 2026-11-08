@@ -1003,16 +1003,28 @@ function selectEarthquake(eventId) {
     ? `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`
     : "Not available";
 
+  // Summary and local estimate have different meanings; keep them visually separate.
+  document.getElementById("report-magnitude").textContent = Number.isFinite(event.magnitude)
+    ? `M ${event.magnitude.toFixed(1)}` : "Not reported";
+  document.getElementById("report-kind").textContent = event.isHistoricalTest
+    ? "Historical test report" : "EMSC earthquake report";
+  document.getElementById("report-time").textContent = formatDate(event.time);
+  const hasIntensity = Number.isFinite(event.intensity);
+  const crossed = meetsDangerThreshold(event.intensity);
+  document.getElementById("report-intensity").textContent = hasIntensity ? event.intensity.toFixed(2) : "—";
+  document.getElementById("report-shaking-description").textContent = hasIntensity
+    ? describeIntensity(event.intensity) : "Allow location access to calculate this estimate.";
+  const threshold = document.getElementById("report-threshold");
+  threshold.textContent = hasIntensity
+    ? (crossed ? `At or above ${DANGER_INTENSITY}` : `Below ${DANGER_INTENSITY}`)
+    : "Location needed";
+  threshold.dataset.state = hasIntensity ? (crossed ? "crossed" : "below") : "unknown";
+
   // Use textContent: region names and other catalogue values are external data.
   const fields = [
-    ["Time (your time zone)", formatDate(event.time)],
-    ["Magnitude", formatNumber(event.magnitude)],
     ["Depth", formatNumber(event.depth, " km")],
     ["Distance from you", formatNumber(event.distance, " km")],
     ["Epicenter", `${event.latitude.toFixed(5)}, ${event.longitude.toFixed(5)}`],
-    ["Estimated intensity near you", Number.isFinite(event.intensity)
-      ? `${event.intensity.toFixed(1)} · ${describeIntensity(event.intensity)}`
-      : "Allow location access to estimate shaking near you."],
     ["Source", "EMSC / SeismicPortal"],
     ["Event ID", event.id]
   ];
@@ -1646,6 +1658,7 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
 
 
