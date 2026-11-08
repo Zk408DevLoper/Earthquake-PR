@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=10">
+  <link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
   <div class="app-shell">
@@ -138,6 +138,17 @@
           <h2 id="event-details-heading" tabindex="-1">Earthquake details</h2>
           <p id="event-details-location"></p>
         </div>
+        <!-- Separate the reported magnitude from shaking estimated at the user. -->
+        <div class="report-summary">
+          <div class="report-magnitude"><span>Magnitude</span><strong id="report-magnitude">—</strong><small>Reported by EMSC</small></div>
+          <div class="report-context"><span id="report-kind">Earthquake report</span><p id="report-time"></p></div>
+        </div>
+        <section class="report-shaking" aria-labelledby="report-shaking-heading">
+          <div class="report-shaking-heading"><h3 id="report-shaking-heading">Estimated shaking near you</h3><span id="report-threshold"></span></div>
+          <div class="report-shaking-value"><strong id="report-intensity">—</strong><p id="report-shaking-description"></p></div>
+          <p class="data-note">Calculated from your location, magnitude and depth. This is an estimate, not measured shaking.</p>
+        </section>
+        <h3 class="report-section-title">Report information</h3>
         <dl id="event-details-fields" class="event-details-fields"></dl>
         <p class="data-note">Details reflect the report when opened. Estimated shaking is not a measurement. Reports may be revised.</p>
         <button id="event-details-map" class="primary-button full-width" type="button">View on map</button>
@@ -303,6 +314,7 @@
   </script>
 </body>
 </html>
+
 
 
 
