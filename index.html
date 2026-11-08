@@ -146,7 +146,7 @@
         <section class="report-shaking" aria-labelledby="report-shaking-heading">
           <div class="report-shaking-heading"><h3 id="report-shaking-heading">Estimated shaking near you</h3><span id="report-threshold"></span></div>
           <div class="report-shaking-value"><strong id="report-intensity">—</strong><p id="report-shaking-description"></p></div>
-          <p class="data-note">IPE estimate using EMSC magnitude, your distance and an assumed 10 km depth. Mild ≥ 2 · Moderate ≥ 4 · Intense ≥ 5. Not measured shaking.</p>
+          <p id="report-depth-method" class="data-note">IPE uses EMSC reported depth when available, otherwise a 10 km fallback. Not measured shaking.</p>
         </section>
         <p class="data-note">Method adapted from <a href="https://www.nature.com/articles/s41598-024-55279-z" target="_blank" rel="noopener noreferrer">Finazzi et al. (2024)</a>. EMSC catalogue monitoring does not reproduce EQN smartphone detection or early-warning timing.</p>
         <h3 class="report-section-title">Report information</h3>
@@ -315,6 +315,7 @@
   </script>
 </body>
 </html>
+
 
 
 
