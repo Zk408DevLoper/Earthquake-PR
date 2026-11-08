@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=13">
+  <link rel="stylesheet" href="style.css?v=14">
 </head>
 <body>
   <div class="app-shell">
@@ -198,7 +198,17 @@
         </div>
 <section class="settings-panel" aria-labelledby="emergency-title">
 <h3 id="emergency-title">Emergency contacts</h3>
-<p class="settings-hint">Saved on this device. Tap a contact to open the dialer. Add the emergency number verified for your area.</p>
+<p class="settings-hint">Country emergency numbers appear below. Your personal contacts are saved on this device. Use Call to open the dialer.</p>
+<div class="country-emergency-block">
+  <h4>Local emergency services</h4>
+  <p id="emergency-country-status" role="status">Detecting your country…</p>
+  <label for="emergency-country-select">Country for emergency numbers</label>
+  <select id="emergency-country-select"><option value="">Use detected country</option></select>
+  <div id="country-emergency-list"></div>
+  <a id="emergency-country-source" target="_blank" rel="noopener noreferrer" hidden>Official reference</a>
+  <p class="data-note">Call opens your phone dialer. Emergency numbers are for use in the displayed country. Only call emergency services for a real emergency.</p>
+</div>
+<h4 class="saved-contacts-heading">Your saved contacts</h4>
 <div id="emergency-contact-list"></div>
 <form id="emergency-contact-form">
 <label for="contact-name">Contact name</label><input id="contact-name" maxlength="80" required autocomplete="name">
@@ -340,6 +350,7 @@
   </script>
 </body>
 </html>
+
 
 
 
