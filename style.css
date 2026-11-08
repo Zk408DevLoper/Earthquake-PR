@@ -327,3 +327,17 @@ body { font-size:14px; line-height:1.5; }
 .leaflet-popup-content { font-size:14px; line-height:1.5; }
 @media(min-width:760px) { .view { padding:28px 20px; } .bottom-nav { border-radius:10px; box-shadow:none; } }
 @media(max-width:360px) { .view { padding-inline:14px; } .stats-grid .stat-item { padding-inline:8px; } .stats-grid .stat-item:first-child { padding-left:0; } .stats-grid .stat-item:last-child { padding-right:0; } .overview-grid { grid-template-columns:1fr; } }
+
+
+/* Timeline details use definition lists so labels and values stay associated.
+   Narrow screens stack each pair; wider screens align them in two columns. */
+#event-details-back { margin:0 0 16px; padding-left:0; }
+#event-details-location { overflow-wrap:anywhere; }
+.event-details-fields { margin:0 0 20px; }
+.event-details-fields > div { display:grid; grid-template-columns:minmax(120px,1fr) minmax(0,2fr); gap:12px; padding:14px 0; border-bottom:1px solid var(--border); }
+.event-details-fields dt { color:var(--muted); font-size:13px; }
+.event-details-fields dd { margin:0; font-size:14px; overflow-wrap:anywhere; font-variant-numeric:tabular-nums; }
+#event-details-map { margin-top:16px; }
+@media(max-width:400px) {
+  .event-details-fields > div { grid-template-columns:1fr; gap:4px; }
+}
