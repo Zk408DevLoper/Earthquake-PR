@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=12">
+  <link rel="stylesheet" href="style.css?v=13">
 </head>
 <body>
   <div class="app-shell">
@@ -155,29 +155,39 @@
         <button id="event-details-map" class="primary-button full-width" type="button">View on map</button>
       </section>
 
+      <!-- Home summarizes current catalogue data; historical tests stay in Timeline. -->
       <section class="view" id="home-view" aria-label="Home summary">
-        <div class="page-intro">
-          <p class="section-kicker">OVERVIEW</p>
-          <h2>Nearby earthquakes</h2>
-          <p>Recent reports near you.</p>
-        </div>
-<section class="info-panel" aria-labelledby="frequency-title">
-<h3 id="frequency-title">Earthquakes nearby</h3>
-<p id="frequency-counts" role="status"></p>
-<p id="frequency-status">Allow location access to see reports within 100 km.</p>
-<button id="frequency-refresh" type="button" class="text-button">Refresh</button>
-<p class="data-note">Source: EMSC / SeismicPortal earthquake catalogue.</p>
-</section>
-        <div class="overview-grid">
-          <div class="overview-tile"><span class="tile-label">Events loaded</span><strong id="home-event-count">0</strong><span class="tile-foot">available reports</span></div>
-          <div class="overview-tile"><span class="tile-label">Your location</span><strong id="home-location-status">Not set</strong><span class="tile-foot" id="home-coordinates">Waiting for GPS…</span></div>
-        </div>
-        <button class="secondary-button full-width" id="home-map-button" type="button">Open earthquake map</button>
-        <section class="home-latest">
-          <p class="section-kicker">NEAREST EVENT · LAST 2 DAYS</p>
-          <h3 id="home-nearest-location">Location not available yet</h3>
-          <div class="home-latest-meta"><span id="home-nearest-mag">Magnitude --</span><span id="home-nearest-distance">Distance --</span></div>
+        <div class="page-intro"><h2>Near you</h2><p>Recent earthquakes and local shaking estimates.</p></div>
+
+        <section class="home-place" aria-labelledby="home-place-heading">
+          <div><span class="home-label" id="home-place-heading">Your location</span><h3 id="home-place-name">Location not available</h3><p id="home-place-status">Allow location access for nearby reports.</p></div>
+          <button id="home-location-button" class="text-button" type="button">Show city &amp; province</button>
         </section>
+
+        <section class="home-report" aria-labelledby="home-report-heading">
+          <div class="home-section-heading"><h3 id="home-report-heading">Nearest recent earthquake</h3><span>Last 2 days</span></div>
+          <div class="home-report-body"><strong id="home-report-magnitude">—</strong><div><h4 id="home-report-location">Waiting for nearby reports</h4><p id="home-report-time">Location access is needed.</p></div></div>
+          <div class="home-report-footer"><span id="home-report-distance">Distance unavailable</span><button id="home-report-details" class="text-button" type="button" disabled>View details →</button></div>
+        </section>
+
+        <section class="home-estimate" aria-labelledby="home-estimate-heading" data-level="unknown">
+          <span class="home-label" id="home-estimate-heading">Estimated shaking near you</span>
+          <h3 id="home-estimate-title">No recent estimate available</h3>
+          <p id="home-estimate-context">An estimate will appear for the nearest recent earthquake.</p>
+          <p class="data-note">Model estimate for the report above, not measured shaking or a prediction of a future earthquake.</p>
+        </section>
+
+        <section class="info-panel home-frequency" aria-labelledby="frequency-title">
+          <div class="home-section-heading"><div><h3 id="frequency-title">Earthquakes nearby</h3><span>Within 100 km · EMSC reports</span></div><button id="frequency-refresh" type="button" class="text-button">Refresh</button></div>
+          <p id="frequency-counts" role="status"></p>
+          <p id="frequency-status">Allow location access to see nearby counts.</p>
+        </section>
+
+        <section aria-labelledby="home-actions-heading"><h3 id="home-actions-heading" class="home-actions-heading">Explore</h3><div class="home-actions">
+          <button class="secondary-button" id="home-map-button" type="button">Open map</button>
+          <button class="secondary-button" id="home-timeline-button" type="button">Timeline</button>
+          <button class="secondary-button" id="home-contacts-button" type="button">Emergency contacts</button>
+        </div></section>
       </section>
 
       <section class="view" id="menu-view" aria-label="Application menu">
@@ -330,6 +340,7 @@
   </script>
 </body>
 </html>
+
 
 
 
