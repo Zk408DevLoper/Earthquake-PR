@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=8">
+  <link rel="stylesheet" href="style.css?v=9">
 </head>
 <body>
   <div class="app-shell">
@@ -42,6 +42,7 @@
       <span class="updated-label" id="last-updated">Waiting for update</span>
     </div>
 
+    <!-- Each .view is a page. switchView() controls visibility and navigation. -->
     <main class="main-content">
       <section class="view active" id="map-view" aria-label="Earthquake map">
         <div class="map-heading-row">
@@ -111,6 +112,18 @@
           <span id="timeline-count">0 events</span>
         </div>
         <div id="earthquake-list" class="earthquake-list"><div class="empty-state">Loading earthquake events…</div></div>
+      </section>
+
+      <!-- Timeline report details. IDs below are used by selectEarthquake(). -->
+      <section class="view" id="event-details-view" aria-labelledby="event-details-heading">
+        <button id="event-details-back" class="text-button" type="button">← Back to timeline</button>
+        <div class="page-intro">
+          <h2 id="event-details-heading" tabindex="-1">Earthquake details</h2>
+          <p id="event-details-location"></p>
+        </div>
+        <dl id="event-details-fields" class="event-details-fields"></dl>
+        <p class="data-note">Details reflect the report when opened. Estimated shaking is not a measurement. Reports may be revised.</p>
+        <button id="event-details-map" class="primary-button full-width" type="button">View on map</button>
       </section>
 
       <section class="view" id="home-view" aria-label="Home summary">
@@ -273,4 +286,5 @@
   </script>
 </body>
 </html>
+
 
