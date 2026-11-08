@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=9">
+  <link rel="stylesheet" href="style.css?v=10">
 </head>
 <body>
   <div class="app-shell">
@@ -108,6 +108,23 @@
           <h2>Earthquake timeline</h2>
           <p id="timeline-description">Waiting for your location to show earthquakes in your country.</p>
         </div>
+        <!-- Isolated test fixture: never mixed with the live timeline dataset. -->
+        <section class="info-panel historical-test-panel" aria-labelledby="historical-test-heading">
+          <h3 id="historical-test-heading">Test with a past earthquake</h3>
+          <p id="historical-test-status" role="status">Load a real EMSC report to check the strong-shaking threshold.</p>
+          <button id="load-historical-test" type="button" class="secondary-button">Load 2022 Luzon earthquake</button>
+          <article id="historical-test-card" hidden>
+            <h4 id="historical-test-title"></h4>
+            <p id="historical-test-time"></p>
+            <p id="historical-test-result" role="status"></p>
+            <div class="historical-test-actions">
+              <button id="historical-test-details" class="primary-button" type="button">Earthquake details</button>
+              <button id="historical-test-point" class="secondary-button" type="button">Use epicenter as test point</button>
+              <button id="historical-test-remove" class="text-button" type="button">Remove test</button>
+            </div>
+            <p class="data-note">Uses the same intensity formula and ≥ 6 threshold as the website banner. The epicenter option only changes this preview. This does not test Android background notifications.</p>
+          </article>
+        </section>
         <div class="timeline-toolbar">
           <span id="timeline-count">0 events</span>
         </div>
@@ -286,5 +303,6 @@
   </script>
 </body>
 </html>
+
 
 
