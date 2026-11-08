@@ -106,12 +106,6 @@ const elements = {
   earthquakeList: document.getElementById("earthquake-list"),
   timelineCount: document.getElementById("timeline-count"),
   timelineDescription: document.getElementById("timeline-description"),
-  homeEventCount: document.getElementById("home-event-count"),
-  homeLocationStatus: document.getElementById("home-location-status"),
-  homeCoordinates: document.getElementById("home-coordinates"),
-  homeNearestLocation: document.getElementById("home-nearest-location"),
-  homeNearestMag: document.getElementById("home-nearest-mag"),
-  homeNearestDistance: document.getElementById("home-nearest-distance"),
   themeSwatches: document.getElementById("theme-swatches"),
   themeCurrentName: document.getElementById("theme-current-name"),
   toast: document.getElementById("toast")
@@ -742,7 +736,6 @@ async function loadEarthquakeData({ silent = false } = {}) {
     renderTimeline();
     renderNearestEarthquake();
     elements.eventCount.textContent = String(earthquakeEvents.length);
-    elements.homeEventCount.textContent = String(earthquakeEvents.length);
     elements.lastUpdated.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
     setConnectionState("online", "Earthquake data connected");
     elements.mapMessage.hidden = earthquakeEvents.length > 0;
@@ -891,6 +884,7 @@ function setNearestHeading(isSelected) {
 }
 
 function renderNearestEarthquake() {
+  renderHomeSummary();
   setNearestHeading(false);
   updateDangerBanner();
   if (elements.nearestIntensity) elements.nearestIntensity.textContent = "";
@@ -901,16 +895,9 @@ function renderNearestEarthquake() {
     elements.nearestDepth.textContent = "--";
     elements.nearestMagnitude.textContent = "--";
     elements.magnitudeBadge.textContent = "M --";
-    elements.homeLocationStatus.textContent = "Not set";
-    elements.homeCoordinates.textContent = "Waiting for GPS…";
-    elements.homeNearestLocation.textContent = "Location not available yet";
-    elements.homeNearestMag.textContent = "Magnitude --";
-    elements.homeNearestDistance.textContent = "Distance --";
     return;
   }
 
-  elements.homeLocationStatus.textContent = "Available";
-  elements.homeCoordinates.textContent = `${userLatitude.toFixed(4)}, ${userLongitude.toFixed(4)}`;
 
   if (!nearestEvent) {
     const message = eventsScope === "global"
@@ -921,9 +908,6 @@ function renderNearestEarthquake() {
     elements.nearestDepth.textContent = "--";
     elements.nearestMagnitude.textContent = "--";
     elements.magnitudeBadge.textContent = "M --";
-    elements.homeNearestLocation.textContent = message;
-    elements.homeNearestMag.textContent = "Magnitude --";
-    elements.homeNearestDistance.textContent = "Distance --";
     return;
   }
 
@@ -936,9 +920,6 @@ function renderNearestEarthquake() {
   elements.nearestDepth.textContent = nearestEvent.depth === null ? "--" : nearestEvent.depth.toLocaleString();
   elements.nearestMagnitude.textContent = magnitude;
   elements.magnitudeBadge.textContent = `M ${magnitude}`;
-  elements.homeNearestLocation.textContent = locationText;
-  elements.homeNearestMag.textContent = `Magnitude ${magnitude}`;
-  elements.homeNearestDistance.textContent = `Distance ${nearestEvent.distance.toFixed(1)} km`;
   if (elements.nearestIntensity) elements.nearestIntensity.textContent = formatIntensityText(nearestEvent);
 }
 
@@ -1349,6 +1330,26 @@ document.addEventListener("click", event => {
     return;
   }
 
+  if (button.id === "home-report-details") {
+    if (nearestEvent) selectEarthquake(nearestEvent.id);
+    return;
+  }
+  if (button.id === "home-location-button") {
+    if (userLatitude === null || userLongitude === null) {
+      startLocationWatch();
+      showToast("Allow location access in Android or browser settings if it was denied.");
+    } else requestStreetAddress();
+    return;
+  }
+  if (button.id === "home-timeline-button") {
+    switchView("timeline-view");
+    return;
+  }
+  if (button.id === "home-contacts-button") {
+    switchView("menu-view");
+    document.getElementById("emergency-title").scrollIntoView({ block: "center" });
+    return;
+  }
   if (button.id === "home-map-button") {
     switchView("map-view");
   }
@@ -1375,6 +1376,7 @@ function resetMovedLocationAddress() {
 }
 
 function updateLocationPopup() {
+  renderHomeSummary();
   if (!userMarker) return;
   const content = document.createElement("div");
   const title = document.createElement("strong");
@@ -1631,10 +1633,41 @@ document.getElementById("historical-test-remove").addEventListener("click", () =
 });
 
 
+/* ---------- Home summary ---------- */
+
+// Only current catalogue events feed this summary. Historical previews are separate.
+function renderHomeSummary() {
+  const setText = (id, value) => { document.getElementById(id).textContent = value; };
+  const hasLocation = userLatitude !== null && userLongitude !== null;
+  const hasPlace = hasLocation && addressLocation && !addressBusy;
+  setText("home-place-name", hasPlace ? addressText : hasLocation ? "Location available" : "Location not available");
+  setText("home-place-status", hasLocation
+    ? (Number.isFinite(locationAccuracy) ? `GPS accuracy approximately ±${Math.round(locationAccuracy)} m` : "Using your device location")
+    : "Allow location access for nearby reports.");
+  setText("home-location-button", addressBusy ? "Finding location…" : "Show city & province");
+  document.getElementById("home-location-button").disabled = addressBusy;
+
+  const event = hasLocation && eventsScope !== "global" ? nearestEvent : null;
+  document.getElementById("home-report-details").disabled = !event;
+  setText("home-report-magnitude", event && Number.isFinite(event.magnitude) ? `M ${event.magnitude.toFixed(1)}` : "—");
+  setText("home-report-location", event ? event.location : hasLocation ? "No recent nearby report available" : "Waiting for your location");
+  setText("home-report-time", event ? formatDate(event.time) : hasLocation ? "Reports from the last two days appear here." : "Location access is needed.");
+  setText("home-report-distance", event && Number.isFinite(event.distance) ? `${event.distance.toFixed(1)} km from you` : "Distance unavailable");
+  const hasIntensity = event && Number.isFinite(event.intensity);
+  const level = !hasIntensity ? "unknown" : event.intensity >= DANGER_INTENSITY ? "intense"
+    : event.intensity >= MODERATE_INTENSITY ? "moderate" : event.intensity >= MILD_INTENSITY ? "mild" : "below";
+  document.querySelector(".home-estimate").dataset.level = level;
+  setText("home-estimate-title", hasIntensity ? describeIntensity(event.intensity) : "No recent estimate available");
+  setText("home-estimate-context", hasIntensity
+    ? `Estimated intensity ${event.intensity.toFixed(2)} · Based on the report above and ${effectiveDepth(event.depth)} km model depth.`
+    : "An estimate will appear for the nearest recent earthquake.");
+}
+
 /* ---------- Startup and refresh lifecycle ---------- */
 
 // Run after all state declarations and handlers have been initialized.
 loadSavedTheme();
+renderHomeSummary();
 initializeMap();
 renderTimeline();
 loadEarthquakeData();
@@ -1670,6 +1703,7 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
 
 
