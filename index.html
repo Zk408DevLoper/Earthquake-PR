@@ -25,7 +25,7 @@
     })();
   </script>
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="style.css?v=11">
+  <link rel="stylesheet" href="style.css?v=12">
 </head>
 <body>
   <div class="app-shell">
@@ -213,6 +213,21 @@
           <p class="settings-hint">Current theme: <strong id="theme-current-name">Classic</strong></p>
         </section>
 
+
+        <!-- Keep permission purposes visible independently of Android dialogs. -->
+        <section class="settings-panel permissions-panel" aria-labelledby="permissions-heading">
+          <h3 id="permissions-heading">Permissions &amp; privacy</h3>
+          <p class="settings-hint">You control access in Android Settings → Apps → Earthquake Monitor → Permissions.</p>
+          <dl class="permission-list">
+            <div><dt>Location</dt><dd>Shows your position, nearby reports and estimated shaking. Approximate location works; precise location improves distance estimates. Without access, location-based features are unavailable.</dd></div>
+            <div><dt>Notifications</dt><dd>Displays reported-earthquake alerts. You can deny or disable notifications; the website can still be used.</dd></div>
+            <div><dt>Monitoring service</dt><dd>The Android app uses location while its foreground monitoring service runs, including when the screen is closed. Android provides service controls and a monitoring notification, subject to notification settings. Stop the app through Android’s active-app controls to end monitoring.</dd></div>
+            <div><dt>Internet &amp; external services</dt><dd>Loads earthquake reports, maps and place labels. Location is used in requests to EMSC, OpenStreetMap Nominatim and Android’s geocoding provider; map tile requests reveal the viewed area to map providers.</dd></div>
+            <div><dt>Emergency contacts</dt><dd>Names and numbers you enter stay in this app’s local website storage. We do not request access to your phone’s address book. Tapping a number opens the dialer; you choose whether to call.</dd></div>
+          </dl>
+          <p class="data-note">No camera, microphone, address-book, SMS, direct-call or “Allow all the time” location permission is requested by the app’s manifest. Android backup settings may include local app data. Clearing app storage removes saved preferences and contacts.</p>
+        </section>
+
         <div class="source-panel"><p class="section-kicker">DATA SOURCE</p><h3>SeismicPortal / EMSC data service</h3><p>Displayed events depend on the records returned by the service and may be delayed or incomplete.</p></div>
       </section>
 
@@ -315,6 +330,7 @@
   </script>
 </body>
 </html>
+
 
 
 
