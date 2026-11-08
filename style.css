@@ -386,3 +386,23 @@ body { font-size:14px; line-height:1.5; }
   #event-details-view .event-details-fields > div { grid-template-columns:1fr; gap:5px; }
   #event-details-view .event-details-fields dd { text-align:left; }
 }
+
+
+/* Text actions share a baseline, touch target and wrapping behavior. */
+button { line-height:1.4; white-space:normal; overflow-wrap:anywhere; }
+.primary-button, .secondary-button, .text-button { display:inline-flex; align-items:center; justify-content:center; gap:8px; min-height:44px; text-align:center; padding:10px 14px; }
+.full-width { display:flex; width:100%; }
+.menu-row { text-align:left; align-items:center; }
+.menu-row > span:nth-child(2) { min-width:0; }
+.historical-test-actions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:10px; }
+.historical-test-actions button { width:100%; margin:0; }
+#historical-test-remove { grid-column:1 / -1; justify-self:start; width:auto; padding-left:0; }
+#event-details-back { justify-content:flex-start; padding-left:0; }
+.contact-row .text-button { flex:0 0 auto; }
+.report-shaking-heading { align-items:center; }
+#frequency-refresh { padding-left:0; justify-content:flex-start; }
+.permission-list { margin:16px 0 0; }
+.permission-list > div { padding:14px 0; border-top:1px solid var(--border); }
+.permission-list dt { font-size:14px; font-weight:600; margin-bottom:5px; }
+.permission-list dd { margin:0; font-size:13px; line-height:1.65; color:var(--muted); }
+@media(max-width:400px) { .historical-test-actions { grid-template-columns:1fr; } }
