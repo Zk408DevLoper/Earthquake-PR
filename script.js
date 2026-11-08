@@ -951,6 +951,7 @@ function updateTimelineHeading() {
 
 function renderTimeline() {
   updateTimelineHeading();
+  renderHistoricalTest();
 
   const hasLocation = userLatitude !== null && userLongitude !== null;
   if (!hasLocation || eventsScope === "global") {
@@ -986,15 +987,18 @@ function renderTimeline() {
 
 /** Open the report first. Map navigation is a separate, explicit action. */
 function selectEarthquake(eventId) {
-  const event = earthquakeEvents.find(item => item.id === eventId);
+  const event = earthquakeEvents.find(item => item.id === eventId)
+    || (historicalTestEvent?.id === eventId ? historicalTestEvent : null);
   if (!event) {
     showToast("This report is no longer in the timeline. Refresh and try again.");
     return;
   }
 
+  if (event.isHistoricalTest) updateHistoricalTestMetrics();
   selectedEarthquake = { ...event };
   const details = document.getElementById("event-details-fields");
-  document.getElementById("event-details-location").textContent = event.location;
+  document.getElementById("event-details-location").textContent = event.isHistoricalTest
+    ? `${event.location} · Historical test report, not a current alert` : event.location;
   const formatNumber = (value, suffix = "") => Number.isFinite(value)
     ? `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })}${suffix}`
     : "Not available";
@@ -1051,6 +1055,16 @@ function showSelectedEarthquakeOnMap() {
       return Math.abs(position.lat - event.latitude) < 0.000001 && Math.abs(position.lng - event.longitude) < 0.000001;
     });
     if (layer) layer.openPopup();
+    else if (event.isHistoricalTest) {
+      // Historical markers live outside the layer rebuilt by automatic refresh.
+      if (historicalTestMapMarker) historicalTestMapMarker.remove();
+      historicalTestMapMarker = L.marker([event.latitude, event.longitude], {
+        title: "Historical test earthquake"
+      }).addTo(earthquakeMap);
+      const label = document.createElement("span");
+      label.textContent = `Historical test · M ${event.magnitude.toFixed(1)} · ${event.location} · ${formatDate(event.time)}`;
+      historicalTestMapMarker.bindPopup(label).openPopup();
+    }
   }
 
   // Show the chosen event in the card until the next refresh.
@@ -1115,7 +1129,7 @@ function updateDangerBanner() {
     earthquakeEvents.forEach(event => {
       const time = getEventTimeMs(event);
       if (!Number.isFinite(time) || time < cutoff || event.intensity === null) return;
-      if (event.intensity >= DANGER_INTENSITY && (worst === null || event.intensity > worst.intensity)) {
+      if (meetsDangerThreshold(event.intensity) && (worst === null || event.intensity > worst.intensity)) {
         worst = event;
       }
     });
@@ -1479,6 +1493,120 @@ for (const type of ["copy", "cut", "contextmenu", "selectstart"]) {
   });
 }
 
+/* ---------- Historical threshold preview ---------- */
+
+// A separate record keeps historical data out of live counts and alert banners.
+// EMSC catalogue record verified on 2026-11-08: M7.0 Luzon, 2022-07-27.
+let historicalTestEvent = null;
+let historicalTestUsesEpicenter = false;
+let historicalTestMapMarker = null;
+let historicalTestLoading = false;
+
+function meetsDangerThreshold(intensity) {
+  return Number.isFinite(intensity) && intensity >= DANGER_INTENSITY;
+}
+
+function updateHistoricalTestMetrics() {
+  if (!historicalTestEvent) return;
+  const hasLocation = userLatitude !== null && userLongitude !== null;
+  historicalTestEvent.distance = hasLocation
+    ? calculateDistance(userLatitude, userLongitude, historicalTestEvent.latitude, historicalTestEvent.longitude)
+    : null;
+  historicalTestEvent.intensity = hasLocation
+    ? expectedIntensity(historicalTestEvent.distance, historicalTestEvent.depth, historicalTestEvent.magnitude)
+    : null;
+}
+
+function renderHistoricalTest() {
+  const card = document.getElementById("historical-test-card");
+  card.hidden = !historicalTestEvent;
+  document.getElementById("historical-test-status").textContent = historicalTestEvent
+    ? "Historical preview only. Live alerts and report counts are unchanged."
+    : "Load a real EMSC report to check the strong-shaking threshold.";
+  if (!historicalTestEvent) return;
+
+  updateHistoricalTestMetrics();
+  const event = historicalTestEvent;
+  document.getElementById("historical-test-title").textContent = `M ${event.magnitude.toFixed(1)} · ${event.location}`;
+  document.getElementById("historical-test-time").textContent = `${formatDate(event.time)} · Historical report`;
+  const distance = historicalTestUsesEpicenter ? 0 : event.distance;
+  const intensity = expectedIntensity(distance, event.depth, event.magnitude);
+  const locationLabel = historicalTestUsesEpicenter ? "At the epicenter (test point)" : "At your GPS location";
+  const result = document.getElementById("historical-test-result");
+  if (!Number.isFinite(intensity)) {
+    result.textContent = "Allow location access, or use the epicenter test point below.";
+    result.dataset.threshold = "unknown";
+  } else {
+    const crossed = meetsDangerThreshold(intensity);
+    // Display two decimals while comparing the original, unrounded intensity.
+    result.textContent = `${locationLabel}: estimated intensity ${intensity.toFixed(2)} · Threshold ≥ ${DANGER_INTENSITY} · ${crossed ? "Threshold crossed" : "Below threshold"}. Distance: ${distance.toFixed(1)} km.`;
+    result.dataset.threshold = crossed ? "crossed" : "below";
+  }
+  document.getElementById("historical-test-point").textContent = historicalTestUsesEpicenter
+    ? "Use my GPS location" : "Use epicenter as test point";
+}
+
+async function loadHistoricalTest() {
+  if (historicalTestLoading) return;
+  historicalTestLoading = true;
+  const button = document.getElementById("load-historical-test");
+  button.disabled = true;
+  const status = document.getElementById("historical-test-status");
+  status.textContent = "Loading the July 27, 2022 Luzon report from EMSC…";
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), 20000);
+  try {
+    // Query the verified date/region, then select the exact returned catalogue ID.
+    // The service's eventid parameter does not accept this historical GeoJSON ID.
+    const parameters = new URLSearchParams({
+      format: "json", starttime: "2022-07-27T00:00:00", endtime: "2022-07-28T00:00:00",
+      minlatitude: "15", maxlatitude: "20", minlongitude: "118", maxlongitude: "123",
+      minmagnitude: "6", limit: "10"
+    });
+    const response = await fetch(`${EARTHQUAKE_API_BASE}?${parameters}`, {
+      signal: controller.signal,
+      headers: { Accept: "application/json" }
+    });
+    if (!response.ok || response.status === 204) throw new Error("Historical report unavailable");
+    const data = await response.json();
+    const feature = Array.isArray(data.features)
+      ? data.features.find(item => String(item.id) === "20220727_0000002") : null;
+    const event = feature ? eventFromFeature(feature, 0) : null;
+    if (!event || !Number.isFinite(event.magnitude) || !Number.isFinite(getEventTimeMs(event))) {
+      throw new Error("Invalid historical report");
+    }
+    historicalTestEvent = { ...event, isHistoricalTest: true };
+    historicalTestUsesEpicenter = false;
+    switchView("timeline-view");
+    renderHistoricalTest();
+  } catch (error) {
+    status.textContent = "Could not load the EMSC historical report. Check your connection and try again.";
+  } finally {
+    window.clearTimeout(timeout);
+    button.disabled = false;
+    historicalTestLoading = false;
+  }
+}
+
+document.getElementById("load-historical-test").addEventListener("click", loadHistoricalTest);
+document.getElementById("historical-test-point").addEventListener("click", () => {
+  historicalTestUsesEpicenter = !historicalTestUsesEpicenter;
+  renderHistoricalTest();
+});
+document.getElementById("historical-test-details").addEventListener("click", () => {
+  if (historicalTestEvent) selectEarthquake(historicalTestEvent.id);
+});
+document.getElementById("historical-test-remove").addEventListener("click", () => {
+  historicalTestEvent = null;
+  historicalTestUsesEpicenter = false;
+  if (historicalTestMapMarker) {
+    historicalTestMapMarker.remove();
+    historicalTestMapMarker = null;
+  }
+  renderHistoricalTest();
+});
+
+
 /* ---------- Startup and refresh lifecycle ---------- */
 
 // Run after all state declarations and handlers have been initialized.
@@ -1518,6 +1646,7 @@ window.addEventListener("resize", () => {
 window.addEventListener("error", event => {
   console.error("Website runtime error:", event.message, event.filename, event.lineno);
 });
+
 
 
 
