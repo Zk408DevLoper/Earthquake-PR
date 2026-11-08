@@ -116,3 +116,16 @@ Test on real devices: approximate-only permission, precise permission, denial, r
 
 Android references: [runtime permissions](https://developer.android.com/training/permissions/requesting), [location permissions](https://developer.android.com/develop/sensors-and-location/location/permissions), [foreground-service types](https://developer.android.com/develop/background-work/services/fgs/service-types), [notification permission](https://developer.android.com/develop/ui/views/notifications/notification-permission).
 
+
+
+## Android SQLite archive
+
+The Android monitoring service now saves live EMSC reports to app-private `earthquake_research.db`, table `earthquake_reports`, using Android's built-in SQLiteOpenHelper. No additional storage permission or dependency is needed. The helper is `EarthquakeDatabase.java` in the separate Android project.
+
+Each event ID has one latest row: original report JSON, origin time/region/magnitude/epicenter, nullable reported depth, effective model depth, fallback flag, distance, estimated intensity/category, model version and first/last save timestamps. Repeated polling updates the row while preserving its first-save time. At most 2,000 events are retained; oldest last-saved rows are pruned. This is a bounded latest-report archive, not an immutable longitudinal dataset or measured-intensity validation set. Notification tests are excluded. Existing notification deduplication stays in SharedPreferences.
+
+Writes run on the monitoring worker, with bound values and transactions. Database errors are logged without intentionally stopping alert delivery. No exact user GPS coordinates or contact numbers are stored in this archive, although distance/intensity remain location-derived data. The database is local, not uploaded by this feature, and may be included in Android backup under existing app backup settings. Clearing app storage removes it.
+
+Rebuild/install Android, allow location, and let monitoring successfully retrieve reports. In Android Studio open App Inspection → Database Inspector → earthquake_research.db → earthquake_reports. For example: `SELECT event_id, reported_depth_km, model_depth_km, estimated_intensity, shaking_category FROM earthquake_reports ORDER BY last_saved_at DESC LIMIT 50;`
+
+The helper exposes `readRecentReports(limit)` for future native archive/export screens. The website timeline still uses live EMSC requests; this change does not add an archive screen or offline website timeline. SQLite schema checks passed in desktop SQLite; Android compilation and device persistence tests remain required.
